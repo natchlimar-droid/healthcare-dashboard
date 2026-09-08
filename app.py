@@ -7,6 +7,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 
+
+
 # ============================================================
 # 1. ตั้งค่าหน้าเว็บ
 # ============================================================
@@ -96,6 +98,18 @@ X_cols = ['frequency', 'bmi', 'systolic_bp', 'gender_code']
 # ============================================================
 # 4. Sidebar & Dashboard หลัก
 # ============================================================
+st.markdown("""
+<style>
+    /* เปลี่ยนสี Slider และส่วนที่ถูกเลือกใน Sidebar */
+    [data-testid="stSidebar"] div[role="slider"] > div {
+        background-color: #0E9F6E !important;
+    }
+    /* เปลี่ยนสีกล่อง Multiselect เมื่อเลือก */
+    [data-testid="stSidebar"] span[data-baseweb="tag"] {
+        background-color: #0E9F6E !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 st.sidebar.markdown("## ⚙️ Control Panel")
 disease_sel = st.sidebar.multiselect("เลือกกลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
 gender_sel = st.sidebar.multiselect("เลือกเพศ", df['gender'].unique(), default=df['gender'].unique())
