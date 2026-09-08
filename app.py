@@ -1,64 +1,70 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, roc_auc_score
 
-# ตั้งค่าหน้าเว็บ
-st.set_page_config(page_title="DATA 4 U", layout="wide")
+st.set_page_config(layout="wide", page_title="Healthcare Propensity Dashboard")
 
-# CSS ปรับแต่งให้ดูสะอาดและทันสมัย
-st.markdown("""
-    <style>
-    div.stMetric { background-color: #f0f2f6; padding: 20px; border-radius: 15px; border-left: 5px solid #0068c9; }
-    .stPlotlyChart { background-color: white; border-radius: 15px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    </style>
-    """, unsafe_allow_html=True)
+# 1. โหลดและทำความสะอาดข้อมูล
+@st.cache_data
+def load_data():
+    df = pd.read_csv("visits_cleaned.csv")
+    # แยก Systolic/Diastolic จาก bp_raw
+    df[['systolic_bp', 'diastolic_bp']] = df['bp_raw'].str.split(' / ', expand=True).astype(float)
+    df['gender_code'] = df['gender'].map({'ช': 0, 'ญ': 1}).fillna(0.5)
+    df['bmi'] = df['bmi'].fillna(df['bmi'].median())
+    return df
 
-# โหลดข้อมูล
-df = pd.read_csv("visits_cleaned.csv")
+df = load_data()
 
-# Sidebar - ออกแบบให้เป็นเหมือนเมนูควบคุม
-st.sidebar.markdown("## ⚙️ Filters")
-disease_sel = st.sidebar.multiselect("กลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
-gender_sel = st.sidebar.multiselect("เพศ", df['gender'].unique(), default=df['gender'].unique())
+# 2. สร้าง Feature Engineering & Synthetic Target (สำหรับการทำนาย)
+# เราจำลองว่าคนที่มาบ่อย (Freq > 2) หรือมีค่า BP สูง มีแนวโน้มจะซื้อแพ็กเกจ (1)
+df_model = df.groupby('patient_id').agg({
+    'visit_id': 'count',
+    'bmi': 'mean',
+    'systolic_bp': 'mean',
+    'gender_code': 'first'
+}).rename(columns={'visit_id': 'frequency'})
 
-df_f = df[(df['disease_group'].isin(disease_sel)) & (df['gender'].isin(gender_sel))]
+df_model['bought_package'] = ((df_model['frequency'] > 2) | (df_model['systolic_bp'] > 130)).astype(int)
 
-# Header
-st.title("🏥 Healthcare Executive Dashboard")
-st.markdown("ภาพรวมข้อมูลการรักษาและกลุ่มผู้ป่วย")
+# 3. เทรนโมเดล (Random Forest)
+X = df_model[['frequency', 'bmi', 'systolic_bp', 'gender_code']]
+y = df_model['bought_package']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Metrics (KPI Cards)
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("จำนวนเคสทั้งหมด", f"{len(df_f):,}")
-c2.metric("ผู้ป่วยไม่ซ้ำ (Unique)", f"{df_f['patient_id'].nunique():,}")
-c3.metric("อายุเฉลี่ย", f"{df_f['age_at_visit'].mean():.1f} ปี")
-c4.metric("ค่า BMI เฉลี่ย", f"{df_f['bmi'].mean():.1f}")
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
 
-st.markdown("<br>", unsafe_allow_html=True)
+# 4. หน้า Dashboard
+st.title("🏥 Patient Propensity Dashboard")
 
-# กราฟแถวที่ 1
-col1, col2 = st.columns([2, 1])
-with col1:
-    st.subheader("แนวโน้มการรักษาแยกตามกลุ่มโรค")
-    fig1 = px.area(df_f.groupby(['visit_date', 'disease_group']).size().reset_index(name='counts'), 
-                   x='visit_date', y='counts', color='disease_group', template="plotly_white")
-    st.plotly_chart(fig1, use_container_width=True)
+# ส่วนแสดงความแม่นยำโมเดล
+with st.expander("📊 ดูรายละเอียดประสิทธิภาพโมเดล (Model Evaluation)"):
+    y_pred = model.predict(X_test)
+    st.write("Classification Report:")
+    st.write(pd.DataFrame(classification_report(y_test, y_pred, output_dict=True)).T)
+    st.metric("ROC-AUC Score", f"{roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.2f}")
 
-with col2:
-    st.subheader("สัดส่วนเพศ")
-    fig2 = px.pie(df_f, names='gender', hole=0.6, color_discrete_sequence=['#ff9999','#66b3ff'])
-    st.plotly_chart(fig2, use_container_width=True)
+# ส่วนการทำนายรายบุคคล
+st.subheader("🤖 ทำนายโอกาสสนใจแพ็กเกจ")
+selected_patient = st.selectbox("เลือก ID ผู้รับบริการ:", df_model.index)
 
-# กราฟแถวที่ 2
-col3, col4 = st.columns(2)
-with col3:
-    st.subheader("ความดันโลหิต (Systolic vs Diastolic)")
-    fig3 = px.scatter(df_f, x='systolic_bp', y='diastolic_bp', color='disease_group', opacity=0.6)
-    st.plotly_chart(fig3, use_container_width=True)
+patient_data = df_model.loc[[selected_patient]]
+prob = model.predict_proba(patient_data[['frequency', 'bmi', 'systolic_bp', 'gender_code']])[0][1]
 
-with col4:
-    st.subheader("Top 5 Clinic ที่มีผู้ใช้บริการสูงสุด")
-    top_clinics = df_f['clinic_name'].value_counts().head(5).reset_index()
-    fig4 = px.bar(top_clinics, x='count', y='clinic_name', orientation='h', color='count', color_continuous_scale='Blues')
-    st.plotly_chart(fig4, use_container_width=True)
+st.metric(f"โอกาสที่ผู้รับบริการ {selected_patient} จะสนใจแพ็กเกจ", f"{prob*100:.1f}%")
+
+if prob > 0.6:
+    st.success("แนวโน้มสูง: แนะนำเสนอแพ็กเกจตรวจสุขภาพหัวใจ/เบาหวาน")
+else:
+    st.info("แนวโน้มต่ำ: แนะนำแพ็กเกจสุขภาพทั่วไป")
+
+# กราฟ Feature Importance (จุดขายโปรเจกต์)
+st.subheader("💡 ปัจจัยที่มีผลต่อการตัดสินใจซื้อ")
+feat_imp = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_importances_})
+fig = px.bar(feat_imp, x='Importance', y='Feature', orientation='h', color='Importance')
+st.plotly_chart(fig, use_container_width=True)
