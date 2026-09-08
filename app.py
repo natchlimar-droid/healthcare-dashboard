@@ -1,64 +1,60 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 
-# ตั้งค่าหน้าเว็บ
-st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
+# ตั้งค่าหน้าจอ
+st.set_page_config(layout="wide", page_title="Status Dashboard")
 
-# CSS ปรับแต่งให้ดูสะอาดและทันสมัย
+# CSS สำหรับทำ Card Layout
 st.markdown("""
     <style>
-    div.stMetric { background-color: #f0f2f6; padding: 20px; border-radius: 15px; border-left: 5px solid #0068c9; }
-    .stPlotlyChart { background-color: white; border-radius: 15px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .card { background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e6e6e6; box-shadow: 2px 2px 5px #f0f0f0; margin-bottom: 20px; }
+    .status-box { text-align: center; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# โหลดข้อมูล
-df = pd.read_csv("visits_cleaned.csv")
+# 1. ส่วนแถบ Progress Bar ด้านบน
+st.markdown("### 📊 Project Status")
+st.progress(67) # แสดง 67% ตามรูป
 
-# Sidebar - ออกแบบให้เป็นเหมือนเมนูควบคุม
-st.sidebar.markdown("## ⚙️ Filters")
-disease_sel = st.sidebar.multiselect("กลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
-gender_sel = st.sidebar.multiselect("เพศ", df['gender'].unique(), default=df['gender'].unique())
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Planning", "✅")
+c2.metric("Design", "✅")
+c3.metric("Development", "67%")
+c4.metric("Testing", "⏳")
+c5.metric("Launch", "107 Days")
 
-df_f = df[(df['disease_group'].isin(disease_sel)) & (df['gender'].isin(gender_sel))]
+st.markdown("---")
 
-# Header
-st.title("🏥 Healthcare Executive Dashboard")
-st.markdown("ภาพรวมข้อมูลการรักษาและกลุ่มผู้ป่วย")
+# 2. ส่วน Project Budget และ Overdue Tasks
+col1, col2 = st.columns(2)
 
-# Metrics (KPI Cards)
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("จำนวนเคสทั้งหมด", f"{len(df_f):,}")
-c2.metric("ผู้ป่วยไม่ซ้ำ (Unique)", f"{df_f['patient_id'].nunique():,}")
-c3.metric("อายุเฉลี่ย", f"{df_f['age_at_visit'].mean():.1f} ปี")
-c4.metric("ค่า BMI เฉลี่ย", f"{df_f['bmi'].mean():.1f}")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# กราฟแถวที่ 1
-col1, col2 = st.columns([2, 1])
 with col1:
-    st.subheader("แนวโน้มการรักษาแยกตามกลุ่มโรค")
-    fig1 = px.area(df_f.groupby(['visit_date', 'disease_group']).size().reset_index(name='counts'), 
-                   x='visit_date', y='counts', color='disease_group', template="plotly_white")
-    st.plotly_chart(fig1, use_container_width=True)
+    st.subheader("Project Budget")
+    # ใส่กราฟของคุณที่นี่
+    st.bar_chart(pd.DataFrame({'Total': [50, 40, 30]}, index=['Budget', 'Used', 'Target']))
+    st.write("Remaining: **$8,770** | **8.1% Over Target**")
 
 with col2:
-    st.subheader("สัดส่วนเพศ")
-    fig2 = px.pie(df_f, names='gender', hole=0.6, color_discrete_sequence=['#ff9999','#66b3ff'])
-    st.plotly_chart(fig2, use_container_width=True)
+    st.subheader("Overdue Tasks")
+    overdue_data = pd.DataFrame({
+        "Task": ["Update profile", "Update plan", "Configure", "Setup DB"],
+        "Deadline": ["2017-08-15", "2017-08-06", "2017-08-01", "2017-07-18"],
+        "Status": ["1 Day", "4 Days", "10 Days", "24 Days"]
+    })
+    st.table(overdue_data)
 
-# กราฟแถวที่ 2
+# 3. ส่วน Workload และ Upcoming Deadlines
 col3, col4 = st.columns(2)
+
 with col3:
-    st.subheader("ความดันโลหิต (Systolic vs Diastolic)")
-    fig3 = px.scatter(df_f, x='systolic_bp', y='diastolic_bp', color='disease_group', opacity=0.6)
-    st.plotly_chart(fig3, use_container_width=True)
+    st.subheader("Workload")
+    st.bar_chart(pd.DataFrame({'Workload': [67, 55, 48, 45, 30]}, index=['Georg', 'Nancy', 'Richard', 'Kate', 'Paula']))
 
 with col4:
-    st.subheader("Top 5 Clinic ที่มีผู้ใช้บริการสูงสุด")
-    top_clinics = df_f['clinic_name'].value_counts().head(5).reset_index()
-    fig4 = px.bar(top_clinics, x='count', y='clinic_name', orientation='h', color='count', color_continuous_scale='Blues')
-    st.plotly_chart(fig4, use_container_width=True)
+    st.subheader("Upcoming Deadlines")
+    deadline_data = pd.DataFrame({
+        "Employee": ["Kate", "Georg", "Nancy", "Paula"],
+        "Task": ["Twitter", "E-Commerce", "Dev env", "Hire DS"],
+        "Deadline": ["2017-08-15", "2017-08-06", "2017-08-01", "2017-07-18"]
+    })
+    st.table(deadline_data)
