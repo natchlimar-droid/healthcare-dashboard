@@ -188,6 +188,39 @@ st.subheader("🤖 ระบบทำนายความสนใจแพ็�
 p_id = st.selectbox("เลือก ID ผู้ป่วยเพื่อทำนาย:", df_model.index)
 p_data = df_model.loc[[p_id]]
 prob = model.predict_proba(p_data[['frequency', 'bmi', 'systolic_bp', 'gender_code']])[0][1]
+st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
+
+# 1. จัดการข้อมูลให้สะอาดและลบค่าว่างที่เป็นตัวเลขออกก่อน (ป้องกัน Error Plotly)
+df_f_clean = df_f.copy()
+df_f_clean['bmi'] = pd.to_numeric(df_f_clean['bmi'], errors='coerce')
+df_f_clean['systolic_bp'] = pd.to_numeric(df_f_clean['systolic_bp'], errors='coerce')
+df_f_clean['monthly_visit_count'] = pd.to_numeric(df_f_clean['monthly_visit_count'], errors='coerce')
+df_f_clean = df_f_clean.dropna(subset=['bmi', 'systolic_bp', 'monthly_visit_count'])
+df_f_clean['bp_category'] = df_f_clean['bp_category'].fillna('ไม่ระบุ').astype(str)
+
+# 2. สร้างกราฟครั้งเดียว (ใช้สีอัตโนมัติ)
+fig_scatter = px.scatter(
+    df_f_clean, 
+    x='bmi', 
+    y='systolic_bp', 
+    color='bp_category', 
+    size='monthly_visit_count', 
+    hover_data=['patient_id'],
+    color_discrete_sequence=px.colors.qualitative.Pastel 
+)
+st.plotly_chart(fig_scatter, use_container_width=True)
+
+# 3. ตารางสรุป (ต่อจากกราฟ)
+st.markdown("##### 📋 ตารางสรุปกลุ่มเป้าหมาย")
+target_table = df_f.groupby(['disease_group', 'bp_category'], observed=False).agg({
+    'patient_id': 'nunique', 
+    'monthly_visit_count': 'mean'
+}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
+st.dataframe(target_table, use_container_width=True)
+
+# --- ส่วน Prediction ต่อไปตามปกติของคุณ ---
+st.markdown("---")
+st.subheader("🤖 ระบบทำนายความสนใจแพ็กเกจ")
 
 col_p1, col_p2 = st.columns([1, 2])
 col_p1.metric("โอกาสสนใจแพ็กเกจ", f"{prob*100:.1f}%")
