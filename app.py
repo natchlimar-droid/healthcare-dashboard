@@ -58,6 +58,75 @@ st.dataframe(df.head()) # ทดสอบการแสดงผลข้อม
 
 st.write(f"จำนวนผู้ป่วยกลุ่มเสี่ยงความดัน: {len(df[df['bp_category'] == 'เสี่ยง'])}")
 
+st.markdown("---")
+
+st.subheader("📊 การวิเคราะห์เชิงลึก (Deep Analytics)")
+
+
+col1, col2 = st.columns(2)
+
+
+# 1. กราฟ Heatmap ความถี่การมาตามช่วงอายุ (หาช่วงเวลาขายของ)
+
+with col1:
+
+    st.markdown("##### 🗓️ พฤติกรรมการมาใช้บริการ (รายเดือน)")
+
+    # สร้าง Pivot Table สำหรับ Heatmap
+
+    visit_trend = df.groupby(['month', 'age_group']).size().reset_index(name='count')
+
+    fig_heat = px.density_heatmap(visit_trend, x='month', y='age_group', z='count', 
+
+                                  color_continuous_scale='Blues', title="จำนวนเคสแยกตามกลุ่มอายุรายเดือน")
+
+    st.plotly_chart(fig_heat, use_container_width=True)
+
+
+# 2. กราฟเปรียบเทียบ BP Category (หากลุ่มเป้าหมายขายแพ็คเกจ)
+
+with col2:
+
+    st.markdown("##### 🩺 กลุ่มเสี่ยงด้านความดันโลหิต")
+
+    bp_summary = df['bp_category'].value_counts().reset_index()
+
+    fig_bar = px.bar(bp_summary, x='bp_category', y='count', color='bp_category',
+
+                     color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350'},
+
+                     title="จำนวนผู้ป่วยแบ่งตามระดับความเสี่ยงความดัน")
+
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+
+# 3. กราฟวิเคราะห์ความสัมพันธ์ BMI vs Systolic BP
+
+st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน (หาคนกลุ่มเสี่ยงสูง)")
+
+fig_scatter = px.scatter(df, x='bmi', y='systolic_bp', color='bp_category', 
+
+                         size='monthly_visit_count', hover_data=['patient_id'],
+
+                         color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350'})
+
+st.plotly_chart(fig_scatter, use_container_width=True)
+
+
+# 4. ตารางสรุปเพื่อการตัดสินใจเสนอขาย
+
+st.markdown("##### 📋 ตารางสรุปกลุ่มเป้าหมาย")
+
+target_table = df.groupby(['disease_group', 'bp_category']).agg({
+
+    'patient_id': 'nunique',
+
+    'monthly_visit_count': 'mean'
+
+}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
+
+st.dataframe(target_table, use_container_width=True)
+
 # 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
 
