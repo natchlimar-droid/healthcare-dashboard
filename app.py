@@ -10,7 +10,7 @@ from sklearn.metrics import roc_auc_score
 # ============================================================
 # 1. ตั้งค่าหน้าเว็บ
 # ============================================================
-st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
+st.set_page_config(page_title="Data 4 U", layout="wide")
 
 st.markdown("""
     <style>
@@ -113,7 +113,7 @@ else:
 if has_clinic:
     clinic_sel = st.sidebar.multiselect("เลือกคลินิก", df['clinic_name'].unique(), default=df['clinic_name'].unique())
 
-st.title("🏥 Healthcare Executive Dashboard")
+st.title("🏥 Data 4 U")
 
 mask = (
     df['disease_group'].isin(disease_sel)
