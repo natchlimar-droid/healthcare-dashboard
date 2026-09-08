@@ -4,6 +4,60 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.ensemble import RandomForestClassifier
 
+
+@st.cache_data
+
+def load_data():
+
+    df = pd.read_csv("visits_cleaned.csv")
+
+    df['visit_date'] = pd.to_datetime(df['visit_date'], errors='coerce')
+
+    df['month'] = df['visit_date'].dt.to_period('M').astype(str)
+
+    
+
+    df['bp_raw'] = df['bp_raw'].fillna('0 / 0')
+
+    split_data = df['bp_raw'].str.split(' / ', expand=True)
+
+    df['systolic_bp'] = pd.to_numeric(split_data[0], errors='coerce').fillna(0)
+
+    df['diastolic_bp'] = pd.to_numeric(split_data[1], errors='coerce').fillna(0)
+
+    
+
+    df['age_at_visit'] = pd.to_numeric(df['age_at_visit'], errors='coerce').fillna(0)
+
+    df['age_group'] = pd.cut(df['age_at_visit'], bins=[0, 20, 40, 60, 100], labels=['0-20', '21-40', '41-60', '60+'])
+
+    
+
+    df['monthly_visit_count'] = df.groupby(['patient_id', 'month'])['visit_id'].transform('count')
+
+    df['bp_category'] = pd.cut(df['systolic_bp'], bins=[0, 120, 140, 200], labels=['ปกติ', 'เสี่ยง', 'สูง'])
+
+    
+
+    return df
+
+
+# --- 2. เรียกใช้ฟังก์ชันทันทีหลังประกาศ ---
+
+df = load_data()
+
+
+# --- 3. ส่วนอื่นๆ ของ Dashboard (ใส่โค้ดกราฟ/โมเดล ต่อจากนี้ได้เลย) ---
+
+st.title("Healthcare Dashboard")
+
+st.dataframe(df.head()) # ทดสอบการแสดงผลข้อมูล
+
+
+# ตัวอย่างการใช้งานข้อมูลใหม่
+
+st.write(f"จำนวนผู้ป่วยกลุ่มเสี่ยงความดัน: {len(df[df['bp_category'] == 'เสี่ยง'])}")
+
 # 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
 
