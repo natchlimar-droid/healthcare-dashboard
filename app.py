@@ -115,7 +115,7 @@ fig_target = px.bar(
 
     title="จำนวนผู้ป่วยรายกลุ่มโรค แยกตามระดับความดัน",
 
-    labels={'disease_group': 'กลุ่มโรค', 'patient_count': 'จำนวนเคส', 'bp_category': 'ระดับความดัน' , 'nuique:จำนวนคนไข้},
+    labels={'disease_group': 'กลุ่มโรค', 'patient_count': 'จำนวนเคส', 'bp_category': 'ระดับความดัน' , 'nuique' : 'จำนวนคนไข้' },
 
     color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350', 'ไม่ระบุ': '#BDBDBD'},
 
