@@ -15,6 +15,38 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+
+st.subheader("🤖 ระบบทำนายความสนใจแพ็กเกจ")
+
+p_id = st.selectbox("เลือก ID ผู้ป่วย:", df_model.index)
+
+p_data = df_model.loc[[p_id]]
+
+prob = model.predict_proba(p_data[['frequency', 'bmi', 'systolic_bp', 'gender_code']])[0][1]
+
+
+st.metric(f"ความน่าจะเป็นที่ {p_id} จะซื้อแพ็กเกจ", f"{prob*100:.1f}%")
+
+
+if prob > 0.5:
+
+    st.success("แนวโน้ม: สนใจแพ็กเกจพิเศษ")
+
+else:
+
+    st.info("แนวโน้ม: กลุ่มลูกค้าทั่วไป")
+
+
+# แถวท้าย: กราฟสำคัญ
+
+st.subheader("💡 ปัจจัยที่มีผลต่อการตัดสินใจ")
+
+feat_imp = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_importances_})
+
+fig = px.bar(feat_imp, x='Importance', y='Feature', orientation='h', color='Importance')
+
+st.plotly_chart(fig, use_container_width=True)
+
 # 2. โหลดและเตรียมข้อมูล (ต้องทำความสะอาดก่อนรันโมเดล)
 @st.cache_data
 def load_data():
@@ -48,12 +80,7 @@ st.sidebar.markdown("## ⚙️ Controls & Prediction")
 disease_sel = st.sidebar.multiselect("กลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
 gender_sel = st.sidebar.multiselect("เพศ", df['gender'].unique(), default=df['gender'].unique())
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("🤖 ระบบทำนายความสนใจ")
-p_id = st.sidebar.selectbox("เลือก ID ผู้ป่วยเพื่อทำนาย:", df_model.index)
-p_data = df_model.loc[[p_id]]
-prob = model.predict_proba(p_data[['frequency', 'bmi', 'systolic_bp', 'gender_code']])[0][1]
-st.sidebar.metric("โอกาสสนใจแพ็กเกจ", f"{prob*100:.1f}%")
+
 
 # 5. Dashboard หลัก
 df_f = df[(df['disease_group'].isin(disease_sel)) & (df['gender'].isin(gender_sel))]
