@@ -5,10 +5,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.ensemble import RandomForestClassifier
 
-# 1. ตั้งค่าหน้าเว็บ (ต้องอยู่บรรทัดแรกๆ)
+# 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
 
-# CSS สำหรับ Theme สีน้ำเงิน-ฟ้า-ขาว
+# CSS ปรับแต่ง Theme สีน้ำเงิน-ฟ้า-ขาว
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
@@ -18,26 +18,23 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. โหลดและทำความสะอาดข้อมูล (รวมทุกอย่างไว้ที่นี่)
+# 2. โหลดและเตรียมข้อมูล
 @st.cache_data
 def load_data():
     df = pd.read_csv("visits_cleaned.csv")
-    
-    # ข้อมูลพื้นฐาน
     df['visit_date'] = pd.to_datetime(df['visit_date'], errors='coerce')
     df['month'] = df['visit_date'].dt.to_period('M').astype(str)
     
-    # BP Cleaning
     df['bp_raw'] = df['bp_raw'].fillna('0 / 0')
     split_data = df['bp_raw'].str.split(' / ', expand=True)
     df['systolic_bp'] = pd.to_numeric(split_data[0], errors='coerce').fillna(0)
     df['diastolic_bp'] = pd.to_numeric(split_data[1], errors='coerce').fillna(0)
     
-    # Features
     df['gender_code'] = df['gender'].map({'ช': 0, 'ญ': 1}).fillna(0.5)
     df['bmi'] = df['bmi'].fillna(df['bmi'].median())
     df['age_at_visit'] = pd.to_numeric(df['age_at_visit'], errors='coerce').fillna(df['age_at_visit'].median())
     df['age_group'] = pd.cut(df['age_at_visit'], bins=[0, 20, 40, 60, 100], labels=['0-20', '21-40', '41-60', '60+'])
+    
     df['monthly_visit_count'] = df.groupby(['patient_id', 'month'])['visit_id'].transform('count')
     df['bp_category'] = pd.cut(df['systolic_bp'], bins=[0, 120, 140, 200], labels=['ปกติ', 'เสี่ยง', 'สูง']).astype(str).replace('nan', 'ไม่ระบุ')
     
@@ -46,11 +43,8 @@ def load_data():
 df = load_data()
 
 # 3. เตรียมโมเดล
-df_model = df.groupby('patient_id').agg({
-    'visit_id': 'count', 'bmi': 'mean', 'systolic_bp': 'mean', 'gender_code': 'first'
-}).rename(columns={'visit_id': 'frequency'})
+df_model = df.groupby('patient_id').agg({'visit_id': 'count', 'bmi': 'mean', 'systolic_bp': 'mean', 'gender_code': 'first'}).rename(columns={'visit_id': 'frequency'})
 df_model['bought_package'] = ((df_model['frequency'] > 2) | (df_model['systolic_bp'] > 130)).astype(int)
-
 X = df_model[['frequency', 'bmi', 'systolic_bp', 'gender_code']]
 y = df_model['bought_package']
 model = RandomForestClassifier(random_state=42).fit(X, y)
@@ -73,7 +67,7 @@ c4.metric("BMI เฉลี่ย", f"{df_f['bmi'].mean():.1f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# กราฟ
+# กราฟหลัก
 col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader("📈 แนวโน้มการรักษา")
@@ -83,6 +77,32 @@ with col2:
     st.subheader("👥 สัดส่วนเพศ")
     fig2 = px.pie(df_f, names='gender', hole=0.6, color_discrete_sequence=['#90CAF9', '#1565C0'])
     st.plotly_chart(fig2, use_container_width=True)
+
+# --- เพิ่ม Deep Analytics เข้ามา ---
+st.markdown("---")
+st.subheader("📊 การวิเคราะห์เชิงลึก (Deep Analytics)")
+
+d_col1, d_col2 = st.columns(2)
+with d_col1:
+    st.markdown("##### 🗓️ พฤติกรรมการมาใช้บริการ (รายเดือน)")
+    visit_trend = df_f.groupby(['month', 'age_group']).size().reset_index(name='count')
+    fig_heat = px.density_heatmap(visit_trend, x='month', y='age_group', z='count', color_continuous_scale='Blues')
+    st.plotly_chart(fig_heat, use_container_width=True)
+
+with d_col2:
+    st.markdown("##### 🩺 กลุ่มเสี่ยงด้านความดันโลหิต")
+    bp_summary = df_f['bp_category'].value_counts().reset_index()
+    fig_bar = px.bar(bp_summary, x='bp_category', y='count', color='bp_category', color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350', 'ไม่ระบุ': '#BDBDBD'})
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
+fig_scatter = px.scatter(df_f, x='bmi', y='systolic_bp', color='bp_category', size='monthly_visit_count', hover_data=['patient_id'],
+                         color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350', 'ไม่ระบุ': '#BDBDBD'})
+st.plotly_chart(fig_scatter, use_container_width=True)
+
+st.markdown("##### 📋 ตารางสรุปกลุ่มเป้าหมาย")
+target_table = df_f.groupby(['disease_group', 'bp_category']).agg({'patient_id': 'nunique', 'monthly_visit_count': 'mean'}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
+st.dataframe(target_table, use_container_width=True)
 
 # Prediction
 st.markdown("---")
@@ -96,7 +116,6 @@ col_p1.metric("โอกาสสนใจแพ็กเกจ", f"{prob*100:.1
 if prob > 0.5: col_p2.success("แนวโน้ม: สนใจแพ็กเกจพิเศษ แนะนำให้ติดต่อทีมขาย")
 else: col_p2.info("แนวโน้ม: กลุ่มลูกค้าทั่วไป ติดตามผลตามปกติ")
 
-# ปัจจัยสำคัญ
 st.subheader("💡 ปัจจัยที่มีผลต่อการตัดสินใจ")
 feat_imp = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_importances_})
 fig_imp = px.bar(feat_imp, x='Importance', y='Feature', orientation='h', color='Importance', color_continuous_scale='Blues')
