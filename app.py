@@ -41,13 +41,15 @@ def load_data():
     df['gender_code'] = df['gender'].map({'ช': 0, 'ญ': 1}).fillna(0.5)
     df['bmi'] = df['bmi'].fillna(df['bmi'].median())
     df['age_at_visit'] = pd.to_numeric(df['age_at_visit'], errors='coerce').fillna(df['age_at_visit'].median())
-    df['age_group'] = pd.cut(df['age_at_visit'], bins=[0, 20, 40, 60, 100], labels=['0-20', '21-40', '41-60', '60+'])
+    df['age_group'] = pd.cut(
+        df['age_at_visit'], bins=[0, 20, 40, 60, 100], labels=['0-20', '21-40', '41-60', '60+']
+    ).astype(str).replace('nan', 'ไม่ระบุ')
 
     # -- กลุ่ม BMI (มาตรฐาน WHO แบบคร่าว ๆ) --
     df['bmi_group'] = pd.cut(
         df['bmi'], bins=[0, 18.5, 23, 25, 30, 100],
         labels=['ผอม', 'ปกติ', 'ท้วม', 'อ้วน', 'อ้วนมาก']
-    )
+    ).astype(str).replace('nan', 'ไม่ระบุ')
 
     df['monthly_visit_count'] = df.groupby(['patient_id', 'month'])['visit_id'].transform('count')
     df['bp_category'] = pd.cut(
