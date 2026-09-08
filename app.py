@@ -93,11 +93,43 @@ with d_col2:
     st.plotly_chart(fig_bar, use_container_width=True)
 
 # --- กราฟ Scatter และตาราง ---
-st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
-df_f_clean = df_f.dropna(subset=['bmi', 'systolic_bp', 'monthly_visit_count'])
-fig_scatter = px.scatter(df_f_clean, x='bmi', y='systolic_bp', color='bp_category', size='monthly_visit_count', hover_data=['patient_id'], color_discrete_sequence=px.colors.qualitative.Pastel)
-st.plotly_chart(fig_scatter, use_container_width=True)
+st.markdown("##### 📋 วิเคราะห์กลุ่มโรคและความเสี่ยงความดัน")
 
+
+# 1. เตรียมข้อมูลสรุป (ใช้ count จำนวนเคสแทน avg_visits เพื่อแก้ปัญหา None)
+
+target_data = df_f.groupby(['disease_group', 'bp_category'], observed=False).size().reset_index(name='patient_count')
+
+
+# 2. สร้างกราฟแท่งแบบซ้อน
+
+fig_target = px.bar(
+
+    target_data, 
+
+    x='disease_group', 
+
+    y='patient_count', 
+
+    color='bp_category',
+
+    title="จำนวนผู้ป่วยรายกลุ่มโรค แยกตามระดับความดัน",
+
+    labels={'disease_group': 'กลุ่มโรค', 'patient_count': 'จำนวนเคส', 'bp_category': 'ระดับความดัน'},
+
+    color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350', 'ไม่ระบุ': '#BDBDBD'},
+
+    barmode='stack' # การซ้อนแท่งช่วยให้เปรียบเทียบสัดส่วนในกลุ่มโรคได้ดีที่สุด
+
+)
+
+
+st.plotly_chart(fig_target, use_container_width=True)
+
+
+# 3. (ทางเลือก) หากต้องการตาราง ให้แสดงแค่ข้อมูลที่มีค่า เพื่อความสะอาดตา
+
+st.dataframe(target_data[target_data['patient_count'] > 0], use_container_width=True)
 st.markdown("##### 📋 ตารางสรุปกลุ่มเป้าหมาย")
 target_table = df_f.groupby(['disease_group', 'bp_category'], observed=False).agg({'patient_id': 'nunique', 'monthly_visit_count': 'mean'}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
 st.dataframe(target_table, use_container_width=True)
