@@ -104,11 +104,40 @@ with col2:
 
 st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน (หาคนกลุ่มเสี่ยงสูง)")
 
-fig_scatter = px.scatter(df, x='bmi', y='systolic_bp', color='bp_category', 
+# 1. จัดการค่าว่างใน bp_category ก่อนเอาไปทำกราฟ
 
-                         size='monthly_visit_count', hover_data=['patient_id'],
+df['bp_category'] = df['bp_category'].astype(str).replace('nan', 'ไม่ระบุ')
 
-                         color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350'})
+
+# 2. ปรับการตั้งค่าสีให้ครอบคลุมค่าใหม่ด้วย
+
+fig_scatter = px.scatter(
+
+    df, 
+
+    x='bmi', 
+
+    y='systolic_bp', 
+
+    color='bp_category', 
+
+    size='monthly_visit_count', 
+
+    hover_data=['patient_id'],
+
+    color_discrete_map={
+
+        'ปกติ': '#90CAF9', 
+
+        'เสี่ยง': '#FFA726', 
+
+        'สูง': '#EF5350',
+
+        'ไม่ระบุ': '#BDBDBD' # เพิ่มสีสำหรับค่าที่ไม่มีข้อมูล
+
+    }
+
+)
 
 st.plotly_chart(fig_scatter, use_container_width=True)
 
