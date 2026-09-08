@@ -134,21 +134,39 @@ with d_col2:
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
-# --- แก้ไขส่วนกราฟ Scatter โดยเคลียร์ค่าว่างให้สะอาดก่อน ---
 
-# 1. แปลงเป็น string และแทนที่ค่าว่างให้ชัดเจน
+
+# 1. จัดการข้อมูลให้สะอาด
+
 df_f_clean = df_f.copy()
-df_f_clean['bp_category'] = df_f_clean['bp_category'].astype(str).replace('nan', 'ไม่ระบุ')
 
-# 2. สร้างแผนผังสีให้ครบถ้วนตามค่าที่มีโอกาสเกิดขึ้น
-color_map = {
-    'ปกติ': '#90CAF9', 
-    'เสี่ยง': '#FFA726', 
-    'สูง': '#EF5350', 
-    'ไม่ระบุ': '#BDBDBD',
-    'nan': '#BDBDBD' # กันเหนียวเผื่อค่า nan ที่อาจหลุดรอด
-}
+# แทนที่ค่าว่างด้วยคำว่า "ไม่ระบุ" เพื่อป้องกันปัญหา NaN ใน Plotly
 
+df_f_clean['bp_category'] = df_f_clean['bp_category'].fillna('ไม่ระบุ').astype(str)
+
+
+# 2. สร้างกราฟโดยใช้สีแบบอัตโนมัติ (ไม่ต้องกำหนด map เอง)
+
+fig_scatter = px.scatter(
+
+    df_f_clean, 
+
+    x='bmi', 
+
+    y='systolic_bp', 
+
+    color='bp_category', 
+
+    size='monthly_visit_count', 
+
+    hover_data=['patient_id'],
+
+    color_discrete_sequence=px.colors.qualitative.Pastel # เลือกชุดสีที่สวยงามโดยไม่ต้องกำหนดเอง
+
+)
+
+
+st.plotly_chart(fig_scatter, use_container_width=True)
 # 3. สร้างกราฟ
 fig_scatter = px.scatter(
     df_f_clean, 
