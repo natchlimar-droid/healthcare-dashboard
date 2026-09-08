@@ -1,64 +1,64 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-# 1. ตั้งค่าหน้าเว็บแบบ Wide เพื่อให้จัด Layout ได้เหมือนในรูป
-st.set_page_config(layout="wide", page_title="Clean Dashboard")
+# ตั้งค่าหน้าเว็บ
+st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
 
-# 2. CSS สำหรับทำ Sidebar สีเข้ม และ Card สไตล์ Clean
+# CSS ปรับแต่งให้ดูสะอาดและทันสมัย
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] { background-color: #5b6e8a; color: white; }
-    .card { background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    h1, h2 { color: #5b6e8a; }
+    div.stMetric { background-color: #f0f2f6; padding: 20px; border-radius: 15px; border-left: 5px solid #0068c9; }
+    .stPlotlyChart { background-color: white; border-radius: 15px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Sidebar (เมนูซ้ายมือ)
-with st.sidebar:
-    st.title("DASHBOARD")
-    st.write("---")
-    st.write("🏠 Home")
-    st.write("📊 Charts")
-    st.write("⭐ Favorites")
-    st.write("💬 Chat")
-    st.write("⚙️ Setting")
-    st.write("❓ Help")
-
-# 4. โหลดข้อมูล (ใช้ไฟล์ของคุณ)
+# โหลดข้อมูล
 df = pd.read_csv("visits_cleaned.csv")
 
-# 5. Header (Search Bar จำลอง)
-st.text_input("🔍", placeholder="Search...")
+# Sidebar - ออกแบบให้เป็นเหมือนเมนูควบคุม
+st.sidebar.markdown("## ⚙️ Filters")
+disease_sel = st.sidebar.multiselect("กลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
+gender_sel = st.sidebar.multiselect("เพศ", df['gender'].unique(), default=df['gender'].unique())
 
-# 6. กราฟใหญ่ด้านบน (Detailed Chart 01)
-st.subheader("Detailed Chart 01")
-fig_line = px.line(df, x='visit_date', y='systolic_bp', markers=True)
-fig_line.update_layout(template="simple_white")
-st.plotly_chart(fig_line, use_container_width=True)
+df_f = df[(df['disease_group'].isin(disease_sel)) & (df['gender'].isin(gender_sel))]
 
-# 7. Card 3 ช่อง (Earnings, Downloads, Favorites)
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.metric("Total Visits", len(df))
-    st.area_chart(df.head(10)['age_at_visit'])
-with c2:
-    st.metric("Patients", df['patient_id'].nunique())
-    st.area_chart(df.head(10)['bmi'])
-with c3:
-    st.metric("Clinic Count", df['clinic_name'].nunique())
-    st.area_chart(df.head(10)['systolic_bp'])
+# Header
+st.title("🏥 Healthcare Executive Dashboard")
+st.markdown("ภาพรวมข้อมูลการรักษาและกลุ่มผู้ป่วย")
 
-# 8. กราฟแท่งและข่าว (ล่าง)
-col_left, col_right = st.columns([2, 1])
+# Metrics (KPI Cards)
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("จำนวนเคสทั้งหมด", f"{len(df_f):,}")
+c2.metric("ผู้ป่วยไม่ซ้ำ (Unique)", f"{df_f['patient_id'].nunique():,}")
+c3.metric("อายุเฉลี่ย", f"{df_f['age_at_visit'].mean():.1f} ปี")
+c4.metric("ค่า BMI เฉลี่ย", f"{df_f['bmi'].mean():.1f}")
 
-with col_left:
-    st.subheader("Detailed Chart 02")
-    fig_bar = px.bar(df.head(10), x='visit_date', y='age_at_visit', color='disease_group')
-    st.plotly_chart(fig_bar, use_container_width=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
-with col_right:
-    st.subheader("Recently News")
-    for i in range(3):
-        st.write(f"**Update {i+1}**: ข้อมูลล่าสุดประจำวันที่ {df['visit_date'].iloc[i]}")
-        st.caption("Lorem ipsum dolor sit amet...")
+# กราฟแถวที่ 1
+col1, col2 = st.columns([2, 1])
+with col1:
+    st.subheader("แนวโน้มการรักษาแยกตามกลุ่มโรค")
+    fig1 = px.area(df_f.groupby(['visit_date', 'disease_group']).size().reset_index(name='counts'), 
+                   x='visit_date', y='counts', color='disease_group', template="plotly_white")
+    st.plotly_chart(fig1, use_container_width=True)
+
+with col2:
+    st.subheader("สัดส่วนเพศ")
+    fig2 = px.pie(df_f, names='gender', hole=0.6, color_discrete_sequence=['#ff9999','#66b3ff'])
+    st.plotly_chart(fig2, use_container_width=True)
+
+# กราฟแถวที่ 2
+col3, col4 = st.columns(2)
+with col3:
+    st.subheader("ความดันโลหิต (Systolic vs Diastolic)")
+    fig3 = px.scatter(df_f, x='systolic_bp', y='diastolic_bp', color='disease_group', opacity=0.6)
+    st.plotly_chart(fig3, use_container_width=True)
+
+with col4:
+    st.subheader("Top 5 Clinic ที่มีผู้ใช้บริการสูงสุด")
+    top_clinics = df_f['clinic_name'].value_counts().head(5).reset_index()
+    fig4 = px.bar(top_clinics, x='count', y='clinic_name', orientation='h', color='count', color_continuous_scale='Blues')
+    st.plotly_chart(fig4, use_container_width=True)
