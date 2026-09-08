@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # ตั้งค่าหน้าเว็บ
-st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
+st.set_page_config(page_title="DATA 4 U", layout="wide")
 
 # CSS ปรับแต่งให้ดูสะอาดและทันสมัย
 st.markdown("""
