@@ -87,14 +87,14 @@ d_col1, d_col2 = st.columns(2)
 with d_col1:
     st.markdown("##### 🗓️ พฤติกรรมการมาใช้บริการ (รายเดือน)")
     
-    # 1. จัดเตรียมข้อมูล
+    # แก้ไข: บังคับให้เป็น String ทั้งหมดก่อนทำ Groupby
     visit_trend = df_f.copy()
     visit_trend['month'] = visit_trend['month'].astype(str)
+    visit_trend['age_group'] = visit_trend['age_group'].astype(str)
     
-    # 2. ทำการ groupby 
-    pivot_data = visit_trend.groupby(['month', 'age_group'], observed=False).size().reset_index(name='count')
+    # ใช้แค่ groupby ปกติโดยไม่ต้องมี observed
+    pivot_data = visit_trend.groupby(['month', 'age_group']).size().reset_index(name='count')
     
-    # 3. ใช้ px.density_heatmap
     fig_heat = px.density_heatmap(
         pivot_data, 
         x='month', 
@@ -102,20 +102,23 @@ with d_col1:
         z='count', 
         color_continuous_scale='Blues',
         category_orders={
-            "age_group": ["0-20", "21-40", "41-60", "60+"]
+            "age_group": ["0-20", "21-40", "41-60", "60+", "nan"]
         }
     )
-    
     fig_heat.update_layout(xaxis_title="เดือน", yaxis_title="ช่วงอายุ")
     st.plotly_chart(fig_heat, use_container_width=True)
 
-with d_col2: # แก้ไขการย่อหน้าตรงนี้
+with d_col2:
     st.markdown("##### 🩺 ระดับความดันแยกตามช่วงอายุ")
     
-    # 1. ทำการนับจำนวนโดยแบ่งตามกลุ่มอายุและระดับความดัน
-    bp_age_summary = df_f.groupby(['age_group', 'bp_category'], observed=False).size().reset_index(name='count')
+    # แก้ไข: บังคับให้เป็น String ทั้งหมดก่อนทำ Groupby
+    bp_summary = df_f.copy()
+    bp_summary['age_group'] = bp_summary['age_group'].astype(str)
+    bp_summary['bp_category'] = bp_summary['bp_category'].astype(str)
     
-    # 2. สร้าง Bar Chart แบบแยกกลุ่ม
+    # ใช้แค่ groupby ปกติ
+    bp_age_summary = bp_summary.groupby(['age_group', 'bp_category']).size().reset_index(name='count')
+    
     fig_bar = px.bar(
         bp_age_summary, 
         x='age_group', 
@@ -123,15 +126,11 @@ with d_col2: # แก้ไขการย่อหน้าตรงนี้
         color='bp_category',
         barmode='group',
         color_discrete_map={
-            'ปกติ': '#90CAF9', 
-            'เสี่ยง': '#FFA726', 
-            'สูง': '#EF5350', 
-            'ไม่ระบุ': '#BDBDBD'
+            'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350', 'ไม่ระบุ': '#BDBDBD', 'nan': '#E0E0E0'
         },
-        category_orders={"age_group": ["0-20", "21-40", "41-60", "60+"]},
+        category_orders={"age_group": ["0-20", "21-40", "41-60", "60+", "nan"]},
         labels={'age_group': 'ช่วงอายุ', 'count': 'จำนวนคน', 'bp_category': 'ระดับความดัน'}
     )
-    
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
