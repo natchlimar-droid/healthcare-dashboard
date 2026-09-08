@@ -8,7 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 # 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
 
-# CSS ปรับแต่ง Theme สีน้ำเงิน-ฟ้า-ขาว
+# CSS ปรับแต่ง Theme
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
@@ -49,25 +49,22 @@ X = df_model[['frequency', 'bmi', 'systolic_bp', 'gender_code']]
 y = df_model['bought_package']
 model = RandomForestClassifier(random_state=42).fit(X, y)
 
-# 4. Sidebar Controls
+# 4. Sidebar & Dashboard หลัก
 st.sidebar.markdown("## ⚙️ Control Panel")
 disease_sel = st.sidebar.multiselect("เลือกกลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
 gender_sel = st.sidebar.multiselect("เลือกเพศ", df['gender'].unique(), default=df['gender'].unique())
 
-# 5. Dashboard หลัก
 st.title("🏥 Healthcare Executive Dashboard")
 df_f = df[(df['disease_group'].isin(disease_sel)) & (df['gender'].isin(gender_sel))]
 
-# KPI
+# --- KPI Section ---
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("เคสทั้งหมด", f"{len(df_f):,}")
 c2.metric("ผู้ป่วย", f"{df_f['patient_id'].nunique():,}")
 c3.metric("อายุเฉลี่ย", f"{df_f['age_at_visit'].mean():.1f} ปี")
 c4.metric("BMI เฉลี่ย", f"{df_f['bmi'].mean():.1f}")
 
-st.markdown("<br>", unsafe_allow_html=True)
-
-# กราฟหลัก
+# --- กราฟหลัก ---
 col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader("📈 แนวโน้มการรักษา")
@@ -78,149 +75,39 @@ with col2:
     fig2 = px.pie(df_f, names='gender', hole=0.6, color_discrete_sequence=['#90CAF9', '#1565C0'])
     st.plotly_chart(fig2, use_container_width=True)
 
-# --- เพิ่ม Deep Analytics เข้ามา ---
+# --- Deep Analytics ---
 st.markdown("---")
 st.subheader("📊 การวิเคราะห์เชิงลึก (Deep Analytics)")
-
 d_col1, d_col2 = st.columns(2)
 
 with d_col1:
     st.markdown("##### 🗓️ พฤติกรรมการมาใช้บริการ (รายเดือน)")
-    
-    # แก้ไข: บังคับให้เป็น String ทั้งหมดก่อนทำ Groupby
-    visit_trend = df_f.copy()
-    visit_trend['month'] = visit_trend['month'].astype(str)
-    visit_trend['age_group'] = visit_trend['age_group'].astype(str)
-    
-    # ใช้แค่ groupby ปกติโดยไม่ต้องมี observed
-    pivot_data = visit_trend.groupby(['month', 'age_group']).size().reset_index(name='count')
-    
-    fig_heat = px.density_heatmap(
-        pivot_data, 
-        x='month', 
-        y='age_group', 
-        z='count', 
-        color_continuous_scale='Blues',
-        category_orders={
-            "age_group": ["0-20", "21-40", "41-60", "60+", "nan"]
-        }
-    )
-    fig_heat.update_layout(xaxis_title="เดือน", yaxis_title="ช่วงอายุ")
+    pivot_data = df_f.groupby(['month', 'age_group']).size().reset_index(name='count')
+    fig_heat = px.density_heatmap(pivot_data, x='month', y='age_group', z='count', color_continuous_scale='Blues')
     st.plotly_chart(fig_heat, use_container_width=True)
 
 with d_col2:
     st.markdown("##### 🩺 ระดับความดันแยกตามช่วงอายุ")
-    
-    # แก้ไข: บังคับให้เป็น String ทั้งหมดก่อนทำ Groupby
-    bp_summary = df_f.copy()
-    bp_summary['age_group'] = bp_summary['age_group'].astype(str)
-    bp_summary['bp_category'] = bp_summary['bp_category'].astype(str)
-    
-    # ใช้แค่ groupby ปกติ
-    bp_age_summary = bp_summary.groupby(['age_group', 'bp_category']).size().reset_index(name='count')
-    
-    fig_bar = px.bar(
-        bp_age_summary, 
-        x='age_group', 
-        y='count', 
-        color='bp_category',
-        barmode='group',
-        color_discrete_map={
-            'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350', 'ไม่ระบุ': '#BDBDBD', 'nan': '#E0E0E0'
-        },
-        category_orders={"age_group": ["0-20", "21-40", "41-60", "60+", "nan"]},
-        labels={'age_group': 'ช่วงอายุ', 'count': 'จำนวนคน', 'bp_category': 'ระดับความดัน'}
-    )
+    bp_summary = df_f.groupby(['age_group', 'bp_category']).size().reset_index(name='count')
+    fig_bar = px.bar(bp_summary, x='age_group', y='count', color='bp_category', barmode='group', color_discrete_sequence=px.colors.qualitative.Pastel)
     st.plotly_chart(fig_bar, use_container_width=True)
 
+# --- กราฟ Scatter และตาราง ---
 st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
-
-
-# 1. จัดการข้อมูลให้สะอาด
-
-df_f_clean = df_f.copy()
-
-# แทนที่ค่าว่างด้วยคำว่า "ไม่ระบุ" เพื่อป้องกันปัญหา NaN ใน Plotly
-
-df_f_clean['bp_category'] = df_f_clean['bp_category'].fillna('ไม่ระบุ').astype(str)
-
-
-# 2. สร้างกราฟโดยใช้สีแบบอัตโนมัติ (ไม่ต้องกำหนด map เอง)
-
-fig_scatter = px.scatter(
-
-    df_f_clean, 
-
-    x='bmi', 
-
-    y='systolic_bp', 
-
-    color='bp_category', 
-
-    size='monthly_visit_count', 
-
-    hover_data=['patient_id'],
-
-    color_discrete_sequence=px.colors.qualitative.Pastel # เลือกชุดสีที่สวยงามโดยไม่ต้องกำหนดเอง
-
-)
-
-
+df_f_clean = df_f.dropna(subset=['bmi', 'systolic_bp', 'monthly_visit_count'])
+fig_scatter = px.scatter(df_f_clean, x='bmi', y='systolic_bp', color='bp_category', size='monthly_visit_count', hover_data=['patient_id'], color_discrete_sequence=px.colors.qualitative.Pastel)
 st.plotly_chart(fig_scatter, use_container_width=True)
-# 3. สร้างกราฟ
-fig_scatter = px.scatter(
-    df_f_clean, 
-    x='bmi', 
-    y='systolic_bp', 
-    color='bp_category', 
-    size='monthly_visit_count', 
-    hover_data=['patient_id'],
-    color_discrete_map=color_map
-)
-st.plotly_chart(fig_scatter, use_container_width=True)
+
 st.markdown("##### 📋 ตารางสรุปกลุ่มเป้าหมาย")
-target_table = df_f.groupby(['disease_group', 'bp_category']).agg({'patient_id': 'nunique', 'monthly_visit_count': 'mean'}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
+target_table = df_f.groupby(['disease_group', 'bp_category'], observed=False).agg({'patient_id': 'nunique', 'monthly_visit_count': 'mean'}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
 st.dataframe(target_table, use_container_width=True)
 
-# Prediction
+# --- Prediction Section ---
 st.markdown("---")
 st.subheader("🤖 ระบบทำนายความสนใจแพ็กเกจ")
 p_id = st.selectbox("เลือก ID ผู้ป่วยเพื่อทำนาย:", df_model.index)
 p_data = df_model.loc[[p_id]]
 prob = model.predict_proba(p_data[['frequency', 'bmi', 'systolic_bp', 'gender_code']])[0][1]
-st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
-
-# 1. จัดการข้อมูลให้สะอาดและลบค่าว่างที่เป็นตัวเลขออกก่อน (ป้องกัน Error Plotly)
-df_f_clean = df_f.copy()
-df_f_clean['bmi'] = pd.to_numeric(df_f_clean['bmi'], errors='coerce')
-df_f_clean['systolic_bp'] = pd.to_numeric(df_f_clean['systolic_bp'], errors='coerce')
-df_f_clean['monthly_visit_count'] = pd.to_numeric(df_f_clean['monthly_visit_count'], errors='coerce')
-df_f_clean = df_f_clean.dropna(subset=['bmi', 'systolic_bp', 'monthly_visit_count'])
-df_f_clean['bp_category'] = df_f_clean['bp_category'].fillna('ไม่ระบุ').astype(str)
-
-# 2. สร้างกราฟครั้งเดียว (ใช้สีอัตโนมัติ)
-fig_scatter = px.scatter(
-    df_f_clean, 
-    x='bmi', 
-    y='systolic_bp', 
-    color='bp_category', 
-    size='monthly_visit_count', 
-    hover_data=['patient_id'],
-    color_discrete_sequence=px.colors.qualitative.Pastel 
-)
-st.plotly_chart(fig_scatter, use_container_width=True)
-
-# 3. ตารางสรุป (ต่อจากกราฟ)
-st.markdown("##### 📋 ตารางสรุปกลุ่มเป้าหมาย")
-target_table = df_f.groupby(['disease_group', 'bp_category'], observed=False).agg({
-    'patient_id': 'nunique', 
-    'monthly_visit_count': 'mean'
-}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
-st.dataframe(target_table, use_container_width=True)
-
-# --- ส่วน Prediction ต่อไปตามปกติของคุณ ---
-st.markdown("---")
-st.subheader("🤖 ระบบทำนายความสนใจแพ็กเกจ")
 
 col_p1, col_p2 = st.columns([1, 2])
 col_p1.metric("โอกาสสนใจแพ็กเกจ", f"{prob*100:.1f}%")
