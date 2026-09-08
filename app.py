@@ -68,3 +68,20 @@ st.subheader("💡 ปัจจัยที่มีผลต่อการต�
 feat_imp = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_importances_})
 fig = px.bar(feat_imp, x='Importance', y='Feature', orientation='h', color='Importance')
 st.plotly_chart(fig, use_container_width=True)
+@st.cache_data
+def load_data():
+    df = pd.read_csv("visits_cleaned.csv")
+    
+    # 1. จัดการค่าว่างใน bp_raw ก่อน
+    df['bp_raw'] = df['bp_raw'].fillna('0 / 0')
+    
+    # 2. ทำการ split และใช้ errors='coerce' เพื่อให้ค่าที่แปลไม่ได้กลายเป็น NaN แทนที่จะ Error
+    split_data = df['bp_raw'].str.split(' / ', expand=True)
+    df['systolic_bp'] = pd.to_numeric(split_data[0], errors='coerce').fillna(0)
+    df['diastolic_bp'] = pd.to_numeric(split_data[1], errors='coerce').fillna(0)
+    
+    # 3. จัดการข้อมูลอื่นๆ
+    df['gender_code'] = df['gender'].map({'ช': 0, 'ญ': 1}).fillna(0.5)
+    df['bmi'] = df['bmi'].fillna(df['bmi'].median())
+    
+    return df
