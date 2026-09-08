@@ -83,18 +83,18 @@ st.markdown("---")
 st.subheader("📊 การวิเคราะห์เชิงลึก (Deep Analytics)")
 
 d_col1, d_col2 = st.columns(2)
+
 with d_col1:
     st.markdown("##### 🗓️ พฤติกรรมการมาใช้บริการ (รายเดือน)")
     
-    # 1. ตรวจสอบให้แน่ใจว่า month และ age_group เป็น string เพื่อให้ Plotly แสดงผลแบบหมวดหมู่
+    # 1. จัดเตรียมข้อมูล
     visit_trend = df_f.copy()
     visit_trend['month'] = visit_trend['month'].astype(str)
-    visit_trend['age_group'] = visit_trend['age_group'].astype(str)
     
-    # 2. ทำการ groupby ใหม่
-    pivot_data = visit_trend.groupby(['month', 'age_group']).size().reset_index(name='count')
+    # 2. ทำการ groupby 
+    pivot_data = visit_trend.groupby(['month', 'age_group'], observed=False).size().reset_index(name='count')
     
-    # 3. ใช้ px.density_heatmap และระบุ categoryorders ให้เรียงลำดับช่วงอายุ
+    # 3. ใช้ px.density_heatmap
     fig_heat = px.density_heatmap(
         pivot_data, 
         x='month', 
@@ -102,27 +102,26 @@ with d_col1:
         z='count', 
         color_continuous_scale='Blues',
         category_orders={
-            "age_group": ["0-20", "21-40", "41-60", "60+"] # เรียงลำดับช่วงอายุเอง
+            "age_group": ["0-20", "21-40", "41-60", "60+"]
         }
     )
     
-    # ปรับแต่งให้กราฟดู Smooth ขึ้น
     fig_heat.update_layout(xaxis_title="เดือน", yaxis_title="ช่วงอายุ")
     st.plotly_chart(fig_heat, use_container_width=True)
 
-    with d_col2:
+with d_col2: # แก้ไขการย่อหน้าตรงนี้
     st.markdown("##### 🩺 ระดับความดันแยกตามช่วงอายุ")
     
     # 1. ทำการนับจำนวนโดยแบ่งตามกลุ่มอายุและระดับความดัน
-    bp_age_summary = df_f.groupby(['age_group', 'bp_category']).size().reset_index(name='count')
+    bp_age_summary = df_f.groupby(['age_group', 'bp_category'], observed=False).size().reset_index(name='count')
     
-    # 2. สร้าง Bar Chart แบบแยกกลุ่ม (barmode='group')
+    # 2. สร้าง Bar Chart แบบแยกกลุ่ม
     fig_bar = px.bar(
         bp_age_summary, 
         x='age_group', 
         y='count', 
         color='bp_category',
-        barmode='group', # แยกแท่งตามความดัน
+        barmode='group',
         color_discrete_map={
             'ปกติ': '#90CAF9', 
             'เสี่ยง': '#FFA726', 
