@@ -7,47 +7,17 @@ from sklearn.ensemble import RandomForestClassifier
 # 1. ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Healthcare Pro Dashboard", layout="wide")
 
-# CSS ปรับแต่ง
+# CSS สำหรับ Theme สีน้ำเงิน-ฟ้า-ขาว
 st.markdown("""
     <style>
-    div.stMetric { background-color: #f0f2f6; padding: 20px; border-radius: 15px; border-left: 5px solid #0068c9; }
-    .stPlotlyChart { background-color: white; border-radius: 15px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .stApp { background-color: #f8f9fa; }
+    div.stMetric { background-color: #ffffff; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #1E88E5; }
+    .stPlotlyChart { background-color: white; border-radius: 15px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    h1, h2, h3 { color: #0D47A1; }
     </style>
     """, unsafe_allow_html=True)
 
-
-st.subheader("🤖 ระบบทำนายความสนใจแพ็กเกจ")
-
-p_id = st.selectbox("เลือก ID ผู้ป่วย:", df_model.index)
-
-p_data = df_model.loc[[p_id]]
-
-prob = model.predict_proba(p_data[['frequency', 'bmi', 'systolic_bp', 'gender_code']])[0][1]
-
-
-st.metric(f"ความน่าจะเป็นที่ {p_id} จะซื้อแพ็กเกจ", f"{prob*100:.1f}%")
-
-
-if prob > 0.5:
-
-    st.success("แนวโน้ม: สนใจแพ็กเกจพิเศษ")
-
-else:
-
-    st.info("แนวโน้ม: กลุ่มลูกค้าทั่วไป")
-
-
-# แถวท้าย: กราฟสำคัญ
-
-st.subheader("💡 ปัจจัยที่มีผลต่อการตัดสินใจ")
-
-feat_imp = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_importances_})
-
-fig = px.bar(feat_imp, x='Importance', y='Feature', orientation='h', color='Importance')
-
-st.plotly_chart(fig, use_container_width=True)
-
-# 2. โหลดและเตรียมข้อมูล (ต้องทำความสะอาดก่อนรันโมเดล)
+# 2. โหลดและเตรียมข้อมูล (ต้องมาก่อน)
 @st.cache_data
 def load_data():
     df = pd.read_csv("visits_cleaned.csv")
@@ -62,42 +32,57 @@ def load_data():
 
 df = load_data()
 
-# 3. เตรียมโมเดล (ใส่ไว้หลังโหลดข้อมูล)
-df_model = df.groupby('patient_id').agg({
-    'visit_id': 'count',
-    'bmi': 'mean',
-    'systolic_bp': 'mean',
-    'gender_code': 'first'
-}).rename(columns={'visit_id': 'frequency'})
+# 3. เตรียมโมเดล
+df_model = df.groupby('patient_id').agg({'visit_id': 'count', 'bmi': 'mean', 'systolic_bp': 'mean', 'gender_code': 'first'}).rename(columns={'visit_id': 'frequency'})
 df_model['bought_package'] = ((df_model['frequency'] > 2) | (df_model['systolic_bp'] > 130)).astype(int)
-
 X = df_model[['frequency', 'bmi', 'systolic_bp', 'gender_code']]
 y = df_model['bought_package']
 model = RandomForestClassifier(random_state=42).fit(X, y)
 
-# 4. Sidebar - เมนูและเครื่องมือทำนาย
-st.sidebar.markdown("## ⚙️ Controls & Prediction")
-disease_sel = st.sidebar.multiselect("กลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
-gender_sel = st.sidebar.multiselect("เพศ", df['gender'].unique(), default=df['gender'].unique())
-
-
+# 4. Sidebar Controls
+st.sidebar.markdown("## ⚙️ Control Panel")
+disease_sel = st.sidebar.multiselect("เลือกกลุ่มโรค", df['disease_group'].unique(), default=df['disease_group'].unique())
+gender_sel = st.sidebar.multiselect("เลือกเพศ", df['gender'].unique(), default=df['gender'].unique())
 
 # 5. Dashboard หลัก
+st.title("🏥 Healthcare Executive Dashboard")
 df_f = df[(df['disease_group'].isin(disease_sel)) & (df['gender'].isin(gender_sel))]
 
-st.title("🏥 Healthcare Executive Dashboard")
+# KPI Row
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("จำนวนเคสทั้งหมด", f"{len(df_f):,}")
-c2.metric("ผู้ป่วยไม่ซ้ำ", f"{df_f['patient_id'].nunique():,}")
+c1.metric("เคสทั้งหมด", f"{len(df_f):,}")
+c2.metric("ผู้ป่วย", f"{df_f['patient_id'].nunique():,}")
 c3.metric("อายุเฉลี่ย", f"{df_f['age_at_visit'].mean():.1f} ปี")
-c4.metric("ค่า BMI เฉลี่ย", f"{df_f['bmi'].mean():.1f}")
+c4.metric("BMI เฉลี่ย", f"{df_f['bmi'].mean():.1f}")
 
+st.markdown("<br>", unsafe_allow_html=True)
+
+# Graph Row
 col1, col2 = st.columns([2, 1])
 with col1:
-    st.subheader("แนวโน้มการรักษา")
-    fig1 = px.area(df_f.groupby(['visit_date', 'disease_group']).size().reset_index(name='counts'), x='visit_date', y='counts', color='disease_group', template="plotly_white")
+    st.subheader("📈 แนวโน้มการรักษา")
+    fig1 = px.area(df_f.groupby(['visit_date', 'disease_group']).size().reset_index(name='counts'), x='visit_date', y='counts', color='disease_group', color_discrete_sequence=px.colors.sequential.Blues_r)
     st.plotly_chart(fig1, use_container_width=True)
 with col2:
-    st.subheader("สัดส่วนเพศ")
-    fig2 = px.pie(df_f, names='gender', hole=0.6, color_discrete_sequence=['#ff9999','#66b3ff'])
+    st.subheader("👥 สัดส่วนเพศ")
+    fig2 = px.pie(df_f, names='gender', hole=0.6, color_discrete_sequence=['#90CAF9', '#1565C0'])
     st.plotly_chart(fig2, use_container_width=True)
+
+# Prediction Section
+st.markdown("---")
+st.subheader("🤖 ระบบทำนายความสนใจแพ็กเกจ")
+p_id = st.selectbox("เลือก ID ผู้ป่วยเพื่อดูการทำนาย:", df_model.index)
+p_data = df_model.loc[[p_id]]
+prob = model.predict_proba(p_data[['frequency', 'bmi', 'systolic_bp', 'gender_code']])[0][1]
+
+col_pred1, col_pred2 = st.columns([1, 2])
+with col_pred1:
+    st.metric("โอกาสสนใจแพ็กเกจ", f"{prob*100:.1f}%")
+with col_pred2:
+    if prob > 0.5: st.success("แนวโน้ม: สนใจแพ็กเกจพิเศษ แนะนำให้ติดต่อทีมขาย")
+    else: st.info("แนวโน้ม: กลุ่มลูกค้าทั่วไป ติดตามผลตามปกติ")
+
+st.subheader("💡 ปัจจัยที่มีผลต่อการตัดสินใจ")
+feat_imp = pd.DataFrame({'Feature': X.columns, 'Importance': model.feature_importances_})
+fig_imp = px.bar(feat_imp, x='Importance', y='Feature', orientation='h', color='Importance', color_continuous_scale='Blues')
+st.plotly_chart(fig_imp, use_container_width=True)
