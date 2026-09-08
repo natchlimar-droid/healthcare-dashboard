@@ -134,10 +134,32 @@ with d_col2:
     st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("##### 📈 ความสัมพันธ์ BMI กับความดัน")
-fig_scatter = px.scatter(df_f, x='bmi', y='systolic_bp', color='bp_category', size='monthly_visit_count', hover_data=['patient_id'],
-                         color_discrete_map={'ปกติ': '#90CAF9', 'เสี่ยง': '#FFA726', 'สูง': '#EF5350', 'ไม่ระบุ': '#BDBDBD'})
-st.plotly_chart(fig_scatter, use_container_width=True)
+# --- แก้ไขส่วนกราฟ Scatter โดยเคลียร์ค่าว่างให้สะอาดก่อน ---
 
+# 1. แปลงเป็น string และแทนที่ค่าว่างให้ชัดเจน
+df_f_clean = df_f.copy()
+df_f_clean['bp_category'] = df_f_clean['bp_category'].astype(str).replace('nan', 'ไม่ระบุ')
+
+# 2. สร้างแผนผังสีให้ครบถ้วนตามค่าที่มีโอกาสเกิดขึ้น
+color_map = {
+    'ปกติ': '#90CAF9', 
+    'เสี่ยง': '#FFA726', 
+    'สูง': '#EF5350', 
+    'ไม่ระบุ': '#BDBDBD',
+    'nan': '#BDBDBD' # กันเหนียวเผื่อค่า nan ที่อาจหลุดรอด
+}
+
+# 3. สร้างกราฟ
+fig_scatter = px.scatter(
+    df_f_clean, 
+    x='bmi', 
+    y='systolic_bp', 
+    color='bp_category', 
+    size='monthly_visit_count', 
+    hover_data=['patient_id'],
+    color_discrete_map=color_map
+)
+st.plotly_chart(fig_scatter, use_container_width=True)
 st.markdown("##### 📋 ตารางสรุปกลุ่มเป้าหมาย")
 target_table = df_f.groupby(['disease_group', 'bp_category']).agg({'patient_id': 'nunique', 'monthly_visit_count': 'mean'}).rename(columns={'patient_id': 'unique_patients', 'monthly_visit_count': 'avg_visits'})
 st.dataframe(target_table, use_container_width=True)
