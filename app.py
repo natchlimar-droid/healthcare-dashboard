@@ -5,56 +5,141 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score
 import os
 
 # ============================================================
-# 1. ตั้งค่าหน้าเว็บและดีไซน์ UI ให้สะอาดตา
+# 1. Config & Figma-Inspired CSS Design System
 # ============================================================
 st.set_page_config(
-    page_title="Healthcare Intelligence Dashboard",
-    page_icon="🩺",
-    layout="wide"
+    page_title="Executive Health Intelligence",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
+# Custom CSS: Typography, Smooth Interactions, Clean Surface
 st.markdown("""
 <style>
-    .stApp { background-color: #f7f9fc; font-family: 'Sarabun', sans-serif; }
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border-radius: 12px;
-        padding: 16px 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        border: 1px solid #eef2f6;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: #1E293B;
     }
-    div[data-testid="stMetricValue"] {
-        color: #1976D2;
+    .stApp {
+        background: linear-gradient(180deg, #F8FAFC 0%, #EDF2F7 100%);
+    }
+    
+    /* Smooth Transitions like Figma */
+    * {
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Executive Hero Header */
+    .hero-container {
+        padding: 24px 0 12px 0;
+        margin-bottom: 20px;
+    }
+    .hero-title {
+        font-size: 1.85rem;
         font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #0F172A;
+        margin-bottom: 4px;
     }
-    .status-card {
-        padding: 14px 18px;
-        border-radius: 10px;
-        margin-bottom: 12px;
+    .hero-subtitle {
         font-size: 0.95rem;
+        color: #64748B;
+        font-weight: 400;
     }
-    .risk-high { background-color: #ffebee; border-left: 5px solid #d32f2f; color: #b71c1c; }
-    .risk-medium { background-color: #fff8e1; border-left: 5px solid #ffa000; color: #ff6f00; }
-    .risk-low { background-color: #e8f5e9; border-left: 5px solid #388e3c; color: #1b5e20; }
+
+    /* Bento Cards */
+    .bento-card {
+        background: #FFFFFF;
+        border-radius: 16px;
+        padding: 22px;
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+        margin-bottom: 18px;
+    }
+    .bento-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 16px 24px -8px rgba(15, 23, 42, 0.08);
+        border-color: #CBD5E1;
+    }
+
+    /* Metric Cards */
+    .metric-badge {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 20px;
+        margin-bottom: 8px;
+    }
+    .badge-blue { background: #EFF6FF; color: #2563EB; }
+    .badge-amber { background: #FEF3C7; color: #D97706; }
+    .badge-rose { background: #FFE4E6; color: #E11D48; }
+    .badge-emerald { background: #D1FAE5; color: #059669; }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #0F172A;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+    }
+    .metric-label {
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: #64748B;
+        margin-top: 6px;
+    }
+
+    /* Action Recommendation Chip */
+    .action-box {
+        background: #F8FAFC;
+        border-radius: 12px;
+        padding: 16px;
+        border-left: 4px solid #2563EB;
+        font-size: 0.9rem;
+    }
+
+    /* Clean Streamlit Components */
+    div[data-baseweb="tab-list"] {
+        gap: 12px;
+        background: transparent;
+        border-bottom: 1px solid #E2E8F0;
+        padding-bottom: 8px;
+    }
+    button[data-baseweb="tab"] {
+        border-radius: 10px !important;
+        padding: 8px 18px !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        border: none !important;
+        background: transparent !important;
+    }
+    button[aria-selected="true"] {
+        background: #0F172A !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# 2. การโหลดและเตรียมข้อมูล
+# 2. Data Pipeline
 # ============================================================
 @st.cache_data
-def load_and_clean_data():
-    file_path = "visits_cleaned.csv"
-    if not os.path.exists(file_path):
+def fetch_and_clean():
+    filepath = "visits_cleaned.csv"
+    if not os.path.exists(filepath):
         return None, False, False
         
-    df = pd.read_csv(file_path)
+    df = pd.read_csv(filepath)
 
-    # จัดการวันที่
+    # Date parsing
     if 'visit_date' in df.columns:
         df['visit_date'] = pd.to_datetime(df['visit_date'], errors='coerce')
         has_date = df['visit_date'].notna().any()
@@ -62,381 +147,333 @@ def load_and_clean_data():
         has_date = False
 
     if has_date:
-        df['month_year'] = df['visit_date'].dt.strftime('%b %Y')
-        df['month_period'] = df['visit_date'].dt.to_period('M').astype(str)
-        df['weekday'] = df['visit_date'].dt.day_name()
+        df['period'] = df['visit_date'].dt.to_period('M').astype(str)
+        df['month_name'] = df['visit_date'].dt.strftime('%b %Y')
     else:
-        df['month_year'] = 'ไม่ระบุ'
-        df['month_period'] = 'ไม่ระบุ'
-        df['weekday'] = np.nan
+        df['period'] = 'N/A'
+        df['month_name'] = 'N/A'
 
-    # แยกความดันโลหิต
+    # Blood pressure parsing
     if 'bp_raw' in df.columns:
         df['bp_raw'] = df['bp_raw'].fillna('0 / 0')
-        bp_split = df['bp_raw'].str.split(' / ', expand=True)
-        df['systolic_bp'] = pd.to_numeric(bp_split[0], errors='coerce').fillna(0)
-        df['diastolic_bp'] = pd.to_numeric(bp_split[1], errors='coerce').fillna(0) if bp_split.shape[1] > 1 else 0
+        bp = df['bp_raw'].str.split(' / ', expand=True)
+        df['systolic'] = pd.to_numeric(bp[0], errors='coerce').fillna(0)
+        df['diastolic'] = pd.to_numeric(bp[1], errors='coerce').fillna(0) if bp.shape[1] > 1 else 0
     else:
-        df['systolic_bp'] = 0
-        df['diastolic_bp'] = 0
+        df['systolic'] = 0
+        df['diastolic'] = 0
 
-    # เพศ และ BMI
+    # Clean demographics
     df['gender'] = df['gender'].fillna('ไม่ระบุ') if 'gender' in df.columns else 'ไม่ระบุ'
     df['gender_code'] = df['gender'].map({'ช': 0, 'ญ': 1}).fillna(0.5)
 
     if 'bmi' in df.columns:
         df['bmi'] = pd.to_numeric(df['bmi'], errors='coerce')
-        bmi_mid = df['bmi'].dropna().median() if not df['bmi'].dropna().empty else 22.5
-        df['bmi'] = df['bmi'].fillna(bmi_mid)
+        valid_bmi = df['bmi'].dropna()
+        df['bmi'] = df['bmi'].fillna(valid_bmi.median() if not valid_bmi.empty else 22.0)
     else:
-        df['bmi'] = 22.5
+        df['bmi'] = 22.0
 
-    # ช่วงอายุ
+    # Clean age
     has_age = 'age_at_visit' in df.columns and df['age_at_visit'].notna().any()
     if has_age:
         df['age_at_visit'] = pd.to_numeric(df['age_at_visit'], errors='coerce')
-        age_mid = df['age_at_visit'].dropna().median() if not df['age_at_visit'].dropna().empty else 35
-        df['age_at_visit'] = df['age_at_visit'].fillna(age_mid)
-        df['age_group'] = pd.cut(
+        valid_age = df['age_at_visit'].dropna()
+        df['age_at_visit'] = df['age_at_visit'].fillna(valid_age.median() if not valid_age.empty else 35.0)
+        df['age_segment'] = pd.cut(
             df['age_at_visit'],
-            bins=[0, 20, 40, 60, 120],
-            labels=['วัยเด็ก-เยาวชน (≤20)', 'วัยเริ่มทำงาน (21-40)', 'วัยกลางคน (41-60)', 'ผู้สูงวัย (60+)']
+            bins=[0, 25, 45, 60, 120],
+            labels=['Young (<25)', 'Working (25-45)', 'Senior-Mid (46-60)', 'Elderly (60+)']
         ).astype(str).replace('nan', 'ไม่ระบุ')
     else:
-        df['age_group'] = 'ไม่ระบุ'
+        df['age_segment'] = 'ไม่ระบุ'
         df['age_at_visit'] = 0
 
-    # จัดกลุ่ม BMI ตามมาตรฐานเอเชีย/ไทย
-    df['bmi_status'] = pd.cut(
+    # Clinical status definitions
+    df['bmi_category'] = pd.cut(
         df['bmi'],
-        bins=[0, 18.5, 23, 25, 30, 200],
-        labels=['น้ำหนักน้อย', 'น้ำหนักสมส่วน', 'น้ำหนักเกิน (ท้วม)', 'โรคอ้วนระดับ 1', 'โรคอ้วนระดับ 2']
+        bins=[0, 18.5, 23, 25, 30, 150],
+        labels=['น้ำหนักน้อย', 'ปกติ', 'เริ่มอ้วน (Overweight)', 'อ้วนระดับ 1', 'อ้วนระดับ 2']
     ).astype(str).replace('nan', 'ไม่ระบุ')
 
-    # จัดกลุ่มความดันตัวบน (Systolic)
-    df['bp_status'] = pd.cut(
-        df['systolic_bp'],
+    df['bp_category'] = pd.cut(
+        df['systolic'],
         bins=[-1, 120, 139, 300],
-        labels=['ปกติ (<120)', 'เริ่มสูง/เฝ้าระวัง (120-139)', 'ความดันสูง (≥140)']
+        labels=['ปกติ (<120)', 'เฝ้าระวัง (120-139)', 'วิกฤต/สูง (≥140)']
     ).astype(str).replace('nan', 'ไม่ระบุ')
 
-    # นิยามผู้ป่วยกลุ่มเสี่ยงร่วม (Metabolic syndrome alert)
-    df['is_risk_case'] = ((df['bmi'] >= 25) & (df['systolic_bp'] >= 140)).astype(int)
-
-    if 'patient_id' in df.columns and 'visit_id' in df.columns:
-        df['total_visits'] = df.groupby('patient_id')['visit_id'].transform('count')
-    else:
-        df['total_visits'] = 1
-
+    # Executive flags
+    df['critical_risk'] = ((df['bmi'] >= 25) & (df['systolic'] >= 140)).astype(int)
+    
     if 'disease_group' not in df.columns:
         df['disease_group'] = 'ทั่วไป'
 
     return df, has_date, has_age
 
-df, has_date, has_age = load_and_clean_data()
+df, has_date, has_age = fetch_and_clean()
 
 if df is None:
-    st.error("⚠️ ไม่พบไฟล์ `visits_cleaned.csv` กรุณาตรวจสอบการเชื่อมต่อไฟล์ข้อมูล")
+    st.error("⚠️ ไม่พบคลังข้อมูล `visits_cleaned.csv` กรุณาตรวจสอบไฟล์")
     st.stop()
 
 # ============================================================
-# 3. สร้างโมเดลวิเคราะห์ความพร้อมแพ็กเกจสุขภาพ
+# 3. Lightweight Scoring Model
 # ============================================================
 @st.cache_resource
-def build_prediction_model(data_df):
-    if data_df.empty or len(data_df) < 10:
-        return None, None
-    X = data_df[['visit_freq', 'bmi', 'systolic_bp', 'gender_code']]
-    y = data_df['target_candidate']
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y if y.nunique() > 1 else None
-    )
-    clf = RandomForestClassifier(n_estimators=100, random_state=42).fit(X_train, y_train)
-    try:
-        auc = roc_auc_score(y_test, clf.predict_proba(X_test)[:, 1])
-    except:
-        auc = None
-    return clf, auc
+def run_model(data_df):
+    if data_df.empty or len(data_df) < 8:
+        return None
+    feats = ['visits', 'bmi', 'systolic', 'gender_code']
+    X = data_df[feats]
+    y = data_df['target']
+    X_tr, _, y_tr, _ = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = RandomForestClassifier(n_estimators=70, max_depth=5, random_state=42).fit(X_tr, y_tr)
+    return model
 
 if 'patient_id' in df.columns:
-    df_patient_summary = df.groupby('patient_id').agg(
-        visit_freq=('visit_id', 'count') if 'visit_id' in df.columns else ('patient_id', 'count'),
+    summary_df = df.groupby('patient_id').agg(
+        visits=('visit_id', 'count') if 'visit_id' in df.columns else ('patient_id', 'count'),
         bmi=('bmi', 'mean'),
-        systolic_bp=('systolic_bp', 'mean'),
+        systolic=('systolic', 'mean'),
         gender_code=('gender_code', 'first')
     ).round(1)
-
-    # กฎคัดกรองกลุ่มเป้าหมายสำหรับ Health Checkup Package
-    df_patient_summary['target_candidate'] = (
-        (df_patient_summary['visit_freq'] >= 3) | (df_patient_summary['systolic_bp'] >= 135)
-    ).astype(int)
-
-    clf_model, auc_val = build_prediction_model(df_patient_summary)
-    feature_cols = ['visit_freq', 'bmi', 'systolic_bp', 'gender_code']
+    summary_df['target'] = ((summary_df['visits'] >= 3) | (summary_df['systolic'] >= 135)).astype(int)
+    clf = run_model(summary_df)
 else:
-    clf_model, auc_val = None, None
+    clf = None
 
 # ============================================================
-# 4. แถบตัวกรอง (Sidebar Filters)
+# 4. Minimalist Sidebar Filters
 # ============================================================
 with st.sidebar:
-    st.markdown("### 🎛️ ตัวกรองข้อมูล")
+    st.markdown("### 🎛️ Data Scope")
+    disease_filter = st.multiselect("กลุ่มอาการหลัก", sorted(df['disease_group'].unique()), default=sorted(df['disease_group'].unique()))
+    gender_filter = st.multiselect("เพศ", sorted(df['gender'].unique()), default=sorted(df['gender'].unique()))
     
-    selected_diseases = st.multiselect(
-        "กลุ่มโรค / อาการ",
-        options=sorted(df['disease_group'].unique()),
-        default=sorted(df['disease_group'].unique())
-    )
-    
-    selected_genders = st.multiselect(
-        "เพศ",
-        options=sorted(df['gender'].unique()),
-        default=sorted(df['gender'].unique())
-    )
-
-    if has_age:
-        min_age, max_age = int(df['age_at_visit'].min()), int(df['age_at_visit'].max())
-        age_filter = st.slider("ช่วงอายุ", min_age, max_age, (min_age, max_age))
-    else:
-        age_filter = None
-
     if has_date:
-        d_min = df['visit_date'].dropna().min().date()
-        d_max = df['visit_date'].dropna().max().date()
-        date_filter = st.date_input("ช่วงวันที่บันทึกเคส", (d_min, d_max), min_value=d_min, max_value=d_max)
+        d_min, d_max = df['visit_date'].dropna().min().date(), df['visit_date'].dropna().max().date()
+        date_pick = st.date_input("ช่วงเวลา", (d_min, d_max))
     else:
-        date_filter = None
+        date_pick = None
 
-# กรองข้อมูล
-filter_mask = df['disease_group'].isin(selected_diseases) & df['gender'].isin(selected_genders)
-if age_filter:
-    filter_mask &= df['age_at_visit'].between(age_filter[0], age_filter[1])
-if date_filter and isinstance(date_filter, (list, tuple)) and len(date_filter) == 2:
-    start_dt, end_dt = pd.Timestamp(date_filter[0]), pd.Timestamp(date_filter[1])
-    filter_mask &= df['visit_date'].between(start_dt, end_dt) | df['visit_date'].isna()
+# Filtering Logic
+mask = df['disease_group'].isin(disease_filter) & df['gender'].isin(gender_filter)
+if date_pick and len(date_pick) == 2:
+    mask &= df['visit_date'].between(pd.Timestamp(date_pick[0]), pd.Timestamp(date_pick[1])) | df['visit_date'].isna()
 
-df_filtered = df[filter_mask]
+df_view = df[mask]
 
-# ============================================================
-# 5. การแสดงผล Dashboard หลัก
-# ============================================================
-st.title("🩺 ข้อมูลสรุปบริการสุขภาพและคัดกรองความเสี่ยง")
-st.caption("ระบบวิเคราะห์สถิติผู้ป่วย แนวโน้มสุขภาพ และแนะนำโอกาสการนำเสนอแพ็กเกจดูแลเฉพาะบุคคล")
-
-if df_filtered.empty:
-    st.warning("⚠️ ไม่พบข้อมูลตามเงื่อนไขที่เลือก กรุณาปรับเปลี่ยนตัวกรองทางแถบซ้ายมือ")
+if df_view.empty:
+    st.warning("⚠️ ไม่มีข้อมูลตรงกับตัวกรองที่เลือก")
     st.stop()
 
-# --- KPI Cards ภาพรวม ---
-col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-total_cases = len(df_filtered)
-total_patients = df_filtered['patient_id'].nunique() if 'patient_id' in df_filtered.columns else total_cases
-high_risk_cases = df_filtered[df_filtered['is_risk_case'] == 1]['patient_id'].nunique() if 'patient_id' in df_filtered.columns else 0
-avg_systolic = df_filtered[df_filtered['systolic_bp'] > 0]['systolic_bp'].mean()
+# ============================================================
+# 5. Executive UI - Presentation Layout
+# ============================================================
 
-col_kpi1.metric("การรับบริการทั้งหมด", f"{total_cases:,} ครั้ง")
-col_kpi2.metric("จำนวนคนไข้", f"{total_patients:,} คน")
-col_kpi3.metric("ความดันตัวบนเฉลี่ย", f"{avg_systolic:.1f} mmHg" if pd.notna(avg_systolic) else "-")
-col_kpi4.metric(
-    "ผู้ป่วยกลุ่มเสี่ยงเฝ้าระวัง",
-    f"{high_risk_cases:,} คน",
-    f"{(high_risk_cases/total_patients*100):.1f}% ของผู้ป่วย" if total_patients else None,
-    delta_color="inverse"
-)
+# Hero Header
+st.markdown("""
+<div class="hero-container">
+    <div class="hero-title">Executive Health Intelligence Brief</div>
+    <div class="hero-subtitle">สรุปทิศทางสุขภาพคนไข้ กลุ่มความเสี่ยงที่ต้องติดตาม และโอกาสต่อยอดเชิงกลยุทธ์</div>
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown("---")
+# 4 Key Bento Stat Cards
+k1, k2, k3, k4 = st.columns(4)
 
-# --- แยกเนื้อหาด้วย Tabs ที่อ่านง่าย ---
-tab_clinical, tab_trend, tab_crm = st.tabs([
-    "🩺 1. ระดับสุขภาพและความเสี่ยง (Clinical Insights)",
-    "📈 2. พฤติกรรมและแนวโน้มการรักษา (Patterns)",
-    "🎯 3. โอกาสเสนอแพ็กเกจสุขภาพ (Health Packages)"
+total_visits = len(df_view)
+unique_pts = df_view['patient_id'].nunique() if 'patient_id' in df_view.columns else total_visits
+risk_pts = df_view[df_view['critical_risk'] == 1]['patient_id'].nunique() if 'patient_id' in df_view.columns else 0
+risk_percent = (risk_pts / unique_pts * 100) if unique_pts else 0
+avg_sys = df_view[df_view['systolic'] > 0]['systolic'].mean()
+
+with k1:
+    st.markdown(f"""
+    <div class="bento-card">
+        <span class="metric-badge badge-blue">Volume</span>
+        <div class="metric-value">{total_visits:,}</div>
+        <div class="metric-label">จำนวนการเข้ารับการตรวจทั้งหมด</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with k2:
+    st.markdown(f"""
+    <div class="bento-card">
+        <span class="metric-badge badge-emerald">Patients</span>
+        <div class="metric-value">{unique_pts:,}</div>
+        <div class="metric-label">จำนวนผู้รับบริการรายบุคคล</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with k3:
+    st.markdown(f"""
+    <div class="bento-card">
+        <span class="metric-badge badge-amber">Vitals</span>
+        <div class="metric-value">{avg_sys:.1f} <span style="font-size:1.1rem;font-weight:400;color:#94A3B8;">mmHg</span></div>
+        <div class="metric-label">ความดันตัวบนเฉลี่ย (Systolic)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with k4:
+    st.markdown(f"""
+    <div class="bento-card">
+        <span class="metric-badge badge-rose">High Risk</span>
+        <div class="metric-value">{risk_percent:.1f}<span style="font-size:1.1rem;font-weight:400;color:#94A3B8;">%</span></div>
+        <div class="metric-label">คนไข้กลุ่มเสี่ยงสูง ({risk_pts:,} คน)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Navigation Tabs (Figma Segmented Pill Style)
+tab1, tab2, tab3 = st.tabs([
+    "📊 Strategic Overview", 
+    "🚨 Risk Identification", 
+    "💼 Revenue & Care Conversion"
 ])
 
-# ==================== TAB 1: สุขภาพและความเสี่ยง ====================
-with tab_clinical:
-    st.markdown("#### สถานะความดันโลหิตและดัชนีมวลกาย (BMI)")
+# ----------------- TAB 1: Strategic Overview -----------------
+with tab1:
+    c_left, c_right = st.columns([3, 2])
     
-    col_plot1, col_plot2 = st.columns(2)
-    
-    with col_plot1:
-        # สรุปกลุ่มความดันโลหิต
-        bp_dist = df_filtered['bp_status'].value_counts().reset_index()
-        bp_dist.columns = ['สถานะความดัน', 'จำนวนครั้ง']
-        fig_bp = px.pie(
-            bp_dist,
-            names='สถานะความดัน',
-            values='จำนวนครั้ง',
-            color='สถานะความดัน',
-            color_discrete_map={
-                'ปกติ (<120)': '#81C784',
-                'เริ่มสูง/เฝ้าระวัง (120-139)': '#FFB74D',
-                'ความดันสูง (≥140)': '#E57373'
-            },
-            hole=0.45,
-            title="สัดส่วนระดับความดันโลหิต (Systolic)"
-        )
-        st.plotly_chart(fig_bp, use_container_width=True)
-        st.caption("💡 **คำอธิบาย:** คนไข้ในกลุ่ม 'ความดันสูง' ควรได้รับการนัดติดตามผลวัดซ้ำหรือแนะนำปรับพฤติกรรม")
-
-    with col_plot2:
-        # BMI vs ความดันโลหิตเฉลี่ย
-        bmi_bp_rel = df_filtered.groupby('bmi_status', observed=False).agg(
-            mean_systolic=('systolic_bp', 'mean'),
-            patient_count=('patient_id', 'nunique') if 'patient_id' in df_filtered.columns else ('bmi', 'count')
-        ).reset_index()
-
-        fig_bar_bmi = px.bar(
-            bmi_bp_rel,
-            x='bmi_status',
-            y='mean_systolic',
-            text='mean_systolic',
-            color='mean_systolic',
-            color_continuous_scale='Reds',
-            title="ความดันตัวบนเฉลี่ยในแต่ละกลุ่มดัชนีมวลกาย (BMI)",
-            labels={'bmi_status': 'ระดับ BMI', 'mean_systolic': 'ความดันตัวบนเฉลี่ย (mmHg)'}
-        )
-        fig_bar_bmi.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-        fig_bar_bmi.add_hline(y=140, line_dash="dash", line_color="#D32F2F", annotation_text="เกณฑ์เริ่มอันตราย (140)")
-        st.plotly_chart(fig_bar_bmi, use_container_width=True)
-        st.caption("💡 **คำอธิบาย:** แสดงความสัมพันธ์ว่ากลุ่มที่มีภาวะโรคอ้วนมีค่าเฉลี่ยความดันโลหิตแตะระดับเสี่ยงหรือไม่")
-
-    # ตารางคนไข้กลุ่มเสี่ยงที่ต้องการการดูแลเร่งด่วน
-    st.markdown("#### 🚨 รายชื่อผู้ป่วยกลุ่มเสี่ยงสูง (BMI เกินเกณฑ์ร่วมกับความดันสูง)")
-    high_risk_list = df_filtered[df_filtered['is_risk_case'] == 1]
-    if not high_risk_list.empty and 'patient_id' in df_filtered.columns:
-        display_risk = high_risk_list[['patient_id', 'gender', 'disease_group', 'bmi', 'systolic_bp', 'diastolic_bp']].drop_duplicates('patient_id')
-        display_risk.columns = ['รหัสผู้ป่วย', 'เพศ', 'กลุ่มโรค', 'BMI', 'ความดันตัวบน', 'ความดันตัวล่าง']
-        st.dataframe(display_risk.head(10), use_container_width=True, hide_index=True)
-        st.info("ℹ️ แสดงรายชื่อสูงสุด 10 รายการแรก เพื่อให้ทีมพยาบาลหรือเจ้าหน้าที่ประสานโทรติดตามอาการ")
-    else:
-        st.success("✅ ไม่พบผู้ป่วยที่เข้าเกณฑ์ความเสี่ยงสูงพร้อมกันในกลุ่มตัวกรองปัจจุบัน")
-
-# ==================== TAB 2: พฤติกรรมและแนวโน้ม ====================
-with tab_trend:
-    st.markdown("#### สถิติและการกระจายตัวของการรับบริการ")
-    
-    col_t1, col_t2 = st.columns([3, 2])
-    
-    with col_t1:
+    with c_left:
+        st.markdown("**ปริมาณการใช้บริการรายเดือนตามกลุ่มโรค**")
         if has_date:
-            monthly_trend = df_filtered.groupby(['month_period', 'disease_group']).size().reset_index(name='จำนวนเคส')
-            fig_monthly = px.line(
-                monthly_trend,
-                x='month_period',
-                y='จำนวนเคส',
-                color='disease_group',
-                markers=True,
-                title="แนวโน้มจำนวนครั้งการมารับบริการแยกตามกลุ่มโรค (รายเดือน)",
-                labels={'month_period': 'เดือน', 'จำนวนเคส': 'จำนวนเคส'}
+            monthly_data = df_view.groupby(['period', 'disease_group']).size().reset_index(name='count')
+            fig_trend = px.area(
+                monthly_data, x='period', y='count', color='disease_group',
+                color_discrete_sequence=['#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE', '#E2E8F0']
             )
-            st.plotly_chart(fig_monthly, use_container_width=True)
+            fig_trend.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=0, r=0, t=10, b=0), height=300,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            fig_trend.update_xaxes(showgrid=False)
+            fig_trend.update_yaxes(gridcolor='#F1F5F9')
+            st.plotly_chart(fig_trend, use_container_width=True)
         else:
-            disease_counts = df_filtered['disease_group'].value_counts().reset_index()
-            disease_counts.columns = ['กลุ่มโรค', 'จำนวนครั้ง']
-            fig_bar_dis = px.bar(
-                disease_counts,
-                x='กลุ่มโรค',
-                y='จำนวนครั้ง',
-                color='กลุ่มโรค',
-                title="จำนวนการเข้ารับบริการแยกตามกลุ่มโรค",
-                text_auto=True
+            fig_bar = px.bar(
+                df_view['disease_group'].value_counts().reset_index(),
+                x='count', y='disease_group', orientation='h',
+                color_discrete_sequence=['#3B82F6'], text_auto=True
             )
-            st.plotly_chart(fig_bar_dis, use_container_width=True)
-
-    with col_t2:
-        if has_age:
-            age_dist = df_filtered['age_group'].value_counts().reset_index()
-            age_dist.columns = ['ช่วงอายุ', 'จำนวนครั้ง']
-            fig_age = px.bar(
-                age_dist,
-                x='จำนวนครั้ง',
-                y='ช่วงอายุ',
-                orientation='h',
-                color='ช่วงอายุ',
-                title="สัดส่วนผู้เข้ารับบริการแยกตามช่วงวัย",
-                text_auto=True
+            fig_bar.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=0, r=0, t=10, b=0), height=300
             )
-            st.plotly_chart(fig_age, use_container_width=True)
-        else:
-            st.info("ไม่มีข้อมูลช่วงอายุสำหรับแสดงผลกราฟนี้")
+            st.plotly_chart(fig_bar, use_container_width=True)
 
-# ==================== TAB 3: โอกาสเสนอแพ็กเกจสุขภาพ ====================
-with tab_crm:
-    st.markdown("#### 🎯 ระบบค้นหาผู้ป่วยที่เหมาะสมกับแพ็กเกจตรวจสุขภาพเฉพาะทาง")
-    st.markdown("""
-        ระบบใช้การประเมินจาก **ความถี่ในการมารักษา ค่าความดันโลหิตเฉลี่ย และดัชนีมวลกาย** 
-        เพื่อช่วยระบุว่าคนไข้คนใดควรได้รับการแนะนำโปรแกรมตรวจสุขภาพเชิงป้องกัน (Preventive Checkup)
-    """)
+    with c_right:
+        st.markdown("**การกระจายตัวของสถานะความดันโลหิต**")
+        bp_pie_data = df_view['bp_category'].value_counts().reset_index()
+        bp_pie_data.columns = ['Category', 'Count']
+        fig_donut = px.pie(
+            bp_pie_data, names='Category', values='Count', hole=0.6,
+            color='Category',
+            color_discrete_map={
+                'ปกติ (<120)': '#10B981',
+                'เฝ้าระวัง (120-139)': '#F59E0B',
+                'วิกฤต/สูง (≥140)': '#EF4444'
+            }
+        )
+        fig_donut.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=0, r=0, t=10, b=0), height=300,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.1)
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
 
-    if clf_model is not None and 'patient_id' in df.columns:
-        patient_options = df_patient_summary.index.tolist()
+# ----------------- TAB 2: Risk Identification -----------------
+with tab2:
+    st.markdown("**Correlation ระหว่างค่าเฉลี่ย BMI กับระดับความดันโลหิต**")
+    
+    col_chart, col_action = st.columns([3, 2])
+    
+    with col_chart:
+        bmi_summary = df_view.groupby('bmi_category', observed=False).agg(
+            mean_sys=('systolic', 'mean'),
+            count=('patient_id', 'nunique') if 'patient_id' in df_view.columns else ('bmi', 'count')
+        ).reset_index()
         
-        col_select, col_card = st.columns([1, 2])
-        
-        with col_select:
-            selected_pid = st.selectbox("🔍 เลือกรหัสผู้ป่วย (Patient ID):", patient_options)
-            patient_profile = df_patient_summary.loc[[selected_pid]]
-            
-            # คำนวณความน่าจะเป็น
-            lead_prob = clf_model.predict_proba(patient_profile[feature_cols])[0][1]
-            prob_percent = lead_prob * 100
-            
-            st.metric("คะแนนความเร่งด่วน / ความพร้อม", f"{prob_percent:.1f}%")
+        fig_scatter = px.scatter(
+            bmi_summary, x='bmi_category', y='mean_sys', size='count',
+            color='mean_sys', color_continuous_scale='Sunsetdark',
+            text=bmi_summary['mean_sys'].round(1)
+        )
+        fig_scatter.update_traces(textposition='top center')
+        fig_scatter.add_hline(y=140, line_dash="dot", line_color="#EF4444", annotation_text="เกณฑ์ความดันสูง (140 mmHg)")
+        fig_scatter.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            height=320, margin=dict(l=0, r=0, t=20, b=0), coloraxis_showscale=False
+        )
+        st.plotly_chart(fig_scatter, use_container_width=True)
 
-        with col_card:
-            st.markdown("<br>", unsafe_allow_html=True)
-            if prob_percent >= 65:
+    with col_action:
+        st.markdown("**⚡ สรุปเพื่อการตัดสินใจเชิงคลินิก**")
+        st.markdown(f"""
+        <div class="action-box">
+            <b>1. กลุ่มเฝ้าระวังพิเศษ:</b> มีคนไข้กลุ่มเสี่ยงรวม <b>{risk_pts:,} ราย</b> ({risk_percent:.1f}%) ที่มีค่า BMI ≥ 25 และความดันเกิน 140 mmHg<br><br>
+            <b>2. ทิศทางนโยบาย:</b> ควรเปิด Fast-track คัดกรองโรคหลอดเลือดหัวใจ (Cardiovascular Pathway) เพื่อป้องกันการเข้ารับการรักษาแบบฉุกเฉิน
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if risk_pts > 0 and 'patient_id' in df_view.columns:
+            st.markdown("<br>**ตัวอย่างเคสที่มีความเสี่ยงสูง (Top 5 Priority)**", unsafe_allow_html=True)
+            top_risks = df_view[df_view['critical_risk'] == 1][['patient_id', 'disease_group', 'bmi', 'systolic']].drop_duplicates('patient_id').head(5)
+            st.dataframe(top_risks, use_container_width=True, hide_index=True)
+
+# ----------------- TAB 3: Revenue & Care Conversion -----------------
+with tab3:
+    st.markdown("**ระบบคัดกรองความพร้อมรับแพ็กเกจตรวจสุขภาพเชิงรุก (Predictive Lead Score)**")
+    
+    if clf is not None and 'patient_id' in df.columns:
+        p_list = summary_df.index.tolist()
+        
+        c_p1, c_p2 = st.columns([1, 2])
+        
+        with c_p1:
+            picked_id = st.selectbox("ค้นหารหัสคนไข้เพื่อดูคะแนน:", p_list[:100])
+            patient_row = summary_df.loc[[picked_id]]
+            
+            prob = clf.predict_proba(patient_row[['visits', 'bmi', 'systolic', 'gender_code']])[0][1]
+            score = int(prob * 100)
+            
+            badge_color = "#10B981" if score >= 60 else ("#F59E0B" if score >= 35 else "#64748B")
+            
+            st.markdown(f"""
+            <div class="bento-card" style="text-align:center; padding: 30px 10px;">
+                <div style="font-size:0.85rem; color:#64748B; font-weight:600;">CONVERSION READINESS</div>
+                <div style="font-size:3rem; font-weight:700; color:{badge_color}; margin: 8px 0;">{score}%</div>
+                <div style="font-size:0.8rem; color:#94A3B8;">ความน่าจะเป็นในการตอบรับโปรแกรมสุขภาพ</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with c_p2:
+            st.markdown("**Next Best Action สำหรับทีมประสานงาน**")
+            if score >= 60:
                 st.markdown("""
-                <div class="status-card risk-high">
-                    <b>🔥 คำแนะนำ: ควรนำเสนอแพ็กเกจดูแลต่อเนื่อง</b><br>
-                    คนไข้รายนี้มีความถี่ในการรับบริการต่อเนื่อง หรือมีความดันโลหิตสะสมที่ต้องเฝ้าระวัง เหมาะสำหรับ:
-                    <ul>
-                        <li>แพ็กเกจตรวจคัดกรองหลอดเลือดและหัวใจ (Cardiovascular Screening)</li>
-                        <li>แพ็กเกจตรวจสุขภาพประจำปีกลุ่ม Silver/Gold</li>
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True)
-            elif prob_percent >= 35:
-                st.markdown("""
-                <div class="status-card risk-medium">
-                    <b>⚖️ คำแนะนำ: ติดตามผลตามระยะปกติ</b><br>
-                    คนไข้อยู่ในระดับปานกลาง สามารถส่งข้อมูลสาระความรู้ด้านการดูแลตนเองผ่าน SMS หรือ LINE Official คลินิก
+                <div style="padding:16px; border-radius:12px; background:#ECFDF5; border:1px solid #A7F3D0; color:#065F46;">
+                    <b>🔥 แนะนำโปรแกรม Comprehensive Wellness Check</b><br>
+                    คนไข้มีความถี่การเข้าใช้บริการต่อเนื่องและมีประวัติดัชนีสุขภาพที่ต้องการการติดตามระยะยาว 
+                    ควรส่งต่อทีมลูกค้าสัมพันธ์เพื่อแนะนำโปรแกรมตรวจสุขภาพชุดใหญ่
                 </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div class="status-card risk-low">
-                    <b>🌿 คำแนะนำ: ติดตามผลทั่วไป</b><br>
-                    สุขภาพอยู่ในเกณฑ์ปกติ ความถี่รับบริการไม่บ่อย ไม่จำเป็นต้องเร่งติดตามแพ็กเกจเฉพาะทาง
+                <div style="padding:16px; border-radius:12px; background:#F8FAFC; border:1px solid #E2E8F0; color:#475569;">
+                    <b>🌱 แนะนำการติดตามผลทั่วไป (Standard Follow-up)</b><br>
+                    ส่งบทความสาระสุขภาพเกี่ยวกับการควบคุมอาหารและการออกกำลังกายผ่าน LINE Official คลินิกตามรอบปกติ
                 </div>
                 """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown("##### 📌 ปัจจัยสำคัญที่มีผลต่อการคัดกรอง (Feature Importance)")
-        
-        feat_labels = {
-            'visit_freq': 'ความถี่ในการมารักษา',
-            'systolic_bp': 'ระดับความดันตัวบนเฉลี่ย',
-            'bmi': 'ดัชนีมวลกาย (BMI)',
-            'gender_code': 'เพศ'
-        }
-        
-        importance_df = pd.DataFrame({
-            'ปัจจัย': [feat_labels.get(c, c) for c in feature_cols],
-            'น้ำหนักความสำคัญ (%)': clf_model.feature_importances_ * 100
-        }).sort_values('น้ำหนักความสำคัญ (%)', ascending=True)
-
-        fig_imp = px.bar(
-            importance_df,
-            x='น้ำหนักความสำคัญ (%)',
-            y='ปัจจัย',
-            orientation='h',
-            text='น้ำหนักความสำคัญ (%)',
-            color='น้ำหนักความสำคัญ (%)',
-            color_continuous_scale='Blues'
-        )
-        fig_imp.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        st.plotly_chart(fig_imp, use_container_width=True)
+                
+            st.markdown("<br>**สัดส่วนความสำคัญของตัวแปรในการทำนาย (Feature Drivers)**", unsafe_allow_html=True)
+            importances = pd.DataFrame({
+                'Feature': ['ความถี่เข้ารับบริการ', 'ดัชนีมวลกาย (BMI)', 'ความดันตัวบน (Systolic)', 'เพศ'],
+                'Weight': clf.feature_importances_ * 100
+            }).sort_values('Weight', ascending=True)
+            
+            fig_imp = px.bar(importances, x='Weight', y='Feature', orientation='h', color_discrete_sequence=['#0F172A'], text_auto='.1f')
+            fig_imp.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=160, margin=dict(l=0, r=0, t=0, b=0))
+            st.plotly_chart(fig_imp, use_container_width=True)
     else:
-        st.warning("⚠️ ไม่พบข้อมูลเพียงพอสำหรับการประเมินรายบุคคล")
+        st.info("ℹ️ ต้องมีข้อมูล `patient_id` เพื่อเปิดใช้งานโมเดลการประเมินรายบุคคล")
