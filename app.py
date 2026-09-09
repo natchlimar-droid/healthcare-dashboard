@@ -20,7 +20,7 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-    
+
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
         color: #0F172A;
@@ -33,7 +33,7 @@ st.markdown("""
         padding-bottom: 1.5rem !important;
         max-width: 98% !important;
     }
-    
+
     /* Custom Metric Box */
     div[data-testid="stMetric"] {
         background: #FFFFFF;
@@ -83,7 +83,7 @@ def load_clean_dataset():
     path = "visits_cleaned.csv"
     if not os.path.exists(path):
         return None, False, False
-        
+
     df = pd.read_csv(path)
 
     # 1. วันที่: กรองเฉพาะปีที่เป็นปัจจุบัน (ตัดปี 1970 ออก)
@@ -94,10 +94,14 @@ def load_clean_dataset():
         has_date = valid_date_mask.any()
         if has_date:
             df.loc[~valid_date_mask, 'visit_date'] = pd.NaT
+            # เก็บ "วันที่จริง" ไว้แยกต่างหากสำหรับ sort/group และเก็บ label ไว้แสดงผลเท่านั้น
+            df['visit_day'] = df['visit_date'].dt.normalize()
             df['week_label'] = df['visit_date'].dt.strftime('%d %b')
         else:
+            df['visit_day'] = pd.NaT
             df['week_label'] = 'ไม่ระบุ'
     else:
+        df['visit_day'] = pd.NaT
         df['week_label'] = 'ไม่ระบุ'
 
     # 2. ความดันโลหิต
@@ -159,6 +163,8 @@ if df is None:
 # ============================================================
 # 3. โมเดลประเมิน Lead Conversion
 # ============================================================
+# หมายเหตุ: 'target' สร้างจากกฎ (visits>=3 หรือ systolic>=135) ไม่ใช่ข้อมูลการซื้อจริง
+# ดังนั้น lead_score ด้านล่างคือ "คะแนนตามกฎ" ไม่ใช่ความน่าจะเป็นซื้อจริงในทางสถิติ
 @st.cache_resource
 def get_scoring_engine(data_df):
     if data_df.empty or len(data_df) < 10:
@@ -177,7 +183,7 @@ if 'patient_id' in df.columns:
     ).round(1)
     summary_pts['target'] = ((summary_pts['visits'] >= 3) | (summary_pts['systolic'] >= 135)).astype(int)
     clf = get_scoring_engine(summary_pts)
-    
+
     # คำนวณ Lead Pool ภาพรวม
     if clf is not None:
         probs = clf.predict_proba(summary_pts[['visits', 'bmi', 'systolic', 'gender_code']])[:, 1]
@@ -197,7 +203,7 @@ with st.sidebar:
     st.markdown("### 🎛️ Filter Scope")
     disease_sel = st.multiselect("กลุ่มโรค", sorted(df['disease_group'].unique()), default=sorted(df['disease_group'].unique()))
     gender_sel = st.multiselect("เพศ", sorted(df['gender'].unique()), default=sorted(df['gender'].unique()))
-    
+
     if has_date:
         valid_dates = df['visit_date'].dropna()
         if not valid_dates.empty:
@@ -219,6 +225,34 @@ df_view = df[mask]
 if df_view.empty:
     st.warning("⚠️ ไม่มีข้อมูลตามตัวกรองที่เลือก")
     st.stop()
+
+# ============================================================
+# 4b. คำนวณ Period-over-Period Delta (ครึ่งแรก vs ครึ่งหลังของช่วงที่เลือก)
+#     ใช้แทนสตริงคงที่ เพื่อไม่ให้ st.metric แสดงลูกศรขึ้นแบบหลอกๆ
+# ============================================================
+delta_visits_pct = delta_patients_pct = delta_risk_pct = None
+if has_date:
+    valid_dates_view = df_view['visit_date'].dropna()
+    if not valid_dates_view.empty and valid_dates_view.min() != valid_dates_view.max():
+        midpoint = valid_dates_view.min() + (valid_dates_view.max() - valid_dates_view.min()) / 2
+        prev_period = df_view[df_view['visit_date'] <= midpoint]
+        curr_period = df_view[df_view['visit_date'] > midpoint]
+
+        if len(prev_period) > 0:
+            delta_visits_pct = (len(curr_period) - len(prev_period)) / len(prev_period) * 100
+
+        if 'patient_id' in df_view.columns:
+            prev_pts = prev_period['patient_id'].nunique()
+            curr_pts = curr_period['patient_id'].nunique()
+            if prev_pts > 0:
+                delta_patients_pct = (curr_pts - prev_pts) / prev_pts * 100
+
+            prev_risk = prev_period[prev_period['critical_risk'] == 1]['patient_id'].nunique()
+            curr_risk = curr_period[curr_period['critical_risk'] == 1]['patient_id'].nunique()
+            prev_risk_pct = (prev_risk / prev_pts * 100) if prev_pts else None
+            curr_risk_pct = (curr_risk / curr_pts * 100) if curr_pts else None
+            if prev_risk_pct is not None and curr_risk_pct is not None:
+                delta_risk_pct = curr_risk_pct - prev_risk_pct  # จุดเปอร์เซ็นต์ (pp), ไม่ใช่ % เปลี่ยนแปลง
 
 # ============================================================
 # 5. One-Page Executive Dashboard
@@ -243,10 +277,23 @@ risk_pct = (risk_pts / unique_pts * 100) if unique_pts else 0
 avg_bp = df_view[df_view['systolic'] > 0]['systolic'].mean()
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("TOTAL VISITS", f"{total_v:,}", "เคสรับบริการทั้งหมด")
-k2.metric("ACTIVE PATIENTS", f"{unique_pts:,}", "คนไข้รายบุคคล")
-k3.metric("AVERAGE SYSTOLIC", f"{avg_bp:.1f} mmHg", "เกณฑ์เฝ้าระวัง (120-139)", delta_color="off")
-k4.metric("CRITICAL RISK POOL", f"{risk_pct:.1f}%", f"{risk_pts:,} คน (ต้องเฝ้าระวัง)", delta_color="inverse")
+k1.metric(
+    "TOTAL VISITS", f"{total_v:,}",
+    delta=f"{delta_visits_pct:+.1f}% เทียบครึ่งแรกของช่วง" if delta_visits_pct is not None else None,
+    help="เคสรับบริการทั้งหมดในช่วงที่เลือก"
+)
+k2.metric(
+    "ACTIVE PATIENTS", f"{unique_pts:,}",
+    delta=f"{delta_patients_pct:+.1f}% เทียบครึ่งแรกของช่วง" if delta_patients_pct is not None else None,
+    help="คนไข้รายบุคคลในช่วงที่เลือก"
+)
+k3.metric("AVERAGE SYSTOLIC", f"{avg_bp:.1f} mmHg", help="เกณฑ์เฝ้าระวัง (120-139)")
+k4.metric(
+    "CRITICAL RISK POOL", f"{risk_pct:.1f}%",
+    delta=f"{delta_risk_pct:+.1f} pp เทียบครึ่งแรกของช่วง" if delta_risk_pct is not None else f"{risk_pts:,} คน (ต้องเฝ้าระวัง)",
+    delta_color="inverse",
+    help=f"{risk_pts:,} คน มี BMI≥25 และ Systolic≥140"
+)
 
 st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
@@ -255,12 +302,19 @@ c1, c2, c3 = st.columns([1.6, 1.1, 1.3])
 
 with c1:
     st.markdown("**📈 ปริมาณเคสแยกตามกลุ่มโรค (Timeline)**")
-    valid_trend_data = df_view.dropna(subset=['visit_date']) if has_date else pd.DataFrame()
-    
+    valid_trend_data = df_view.dropna(subset=['visit_date']).copy() if has_date else pd.DataFrame()
+
     if has_date and not valid_trend_data.empty:
-        weekly = valid_trend_data.groupby(['week_label', 'disease_group']).size().reset_index(name='count')
+        # จัดกลุ่มด้วย visit_day (วันที่จริง) เพื่อคำนวณลำดับเวลาที่ถูกต้อง
+        # แล้วค่อยแปลงเป็น week_label สำหรับแสดงผล — แก้ปัญหาแกน X เรียงมั่ว
+        weekly = valid_trend_data.groupby(['visit_day', 'disease_group']).size().reset_index(name='count')
+        weekly = weekly.sort_values('visit_day')
+        weekly['week_label'] = weekly['visit_day'].dt.strftime('%d %b')
+        day_order = weekly.drop_duplicates('visit_day').sort_values('visit_day')['week_label'].tolist()
+
         fig_trend = px.bar(
             weekly, x='week_label', y='count', color='disease_group',
+            category_orders={'week_label': day_order},
             color_discrete_sequence=['#2563EB', '#60A5FA', '#93C5FD', '#CBD5E1'],
             barmode='stack'
         )
@@ -311,13 +365,14 @@ with c3:
         high_risk_full = df_view[df_view['critical_risk'] == 1][[
             'patient_id', 'disease_group', 'bmi', 'systolic', 'diastolic'
         ]].drop_duplicates('patient_id')
-        
-        # แสดงผล 5 รายการแรก
+
+        # เรียงตามความรุนแรง (Systolic แล้ว BMI มากไปน้อย) แทนลำดับที่บังเอิญเจอในข้อมูล
+        high_risk_full = high_risk_full.sort_values(['systolic', 'bmi'], ascending=False)
+
         high_risk_display = high_risk_full.head(5).copy()
         high_risk_display.columns = ['ID', 'กลุ่มโรค', 'BMI', 'Sys', 'Dia']
         st.dataframe(high_risk_display, use_container_width=True, hide_index=True, height=185)
-        
-        # ปุ่มดาวน์โหลดสำหรับส่งต่อทีมคลินิก
+
         csv_data = high_risk_full.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
             label=f"📥 Export กลุ่มเสี่ยง ({len(high_risk_full)} รายการ)",
@@ -331,20 +386,21 @@ with c3:
 
 st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
-# --- แถวที่ 3: ช่วงอายุ โอกาสทางการตลาด และมาตรการสั่งการ ---
-r3_1, r3_2, r3_3 = st.columns([1.1, 1.2, 1.7])
+# --- แถวที่ 3: อายุ x เพศ, แนวโน้มกลุ่มเสี่ยง, โอกาสทางการตลาด และมาตรการสั่งการ ---
+r3_1, r3_2, r3_3, r3_4 = st.columns([1.1, 1.1, 1.1, 1.7])
 
 with r3_1:
-    st.markdown("**👥 สัดส่วนช่วงอายุผู้รับบริการ**")
+    st.markdown("**👥 ช่วงอายุ x เพศ**")
     if has_age:
-        age_counts = df_view['age_group'].value_counts().reset_index()
-        age_counts.columns = ['Age', 'Count']
+        age_gender_counts = df_view.groupby(['age_group', 'gender']).size().reset_index(name='Count')
         fig_age = px.bar(
-            age_counts, x='Age', y='Count', color_discrete_sequence=['#475569'], text_auto=True
+            age_gender_counts, x='age_group', y='Count', color='gender', barmode='group',
+            color_discrete_sequence=['#2563EB', '#F472B6', '#94A3B8']
         )
         fig_age.update_layout(
             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-            height=180, margin=dict(l=0, r=0, t=10, b=0)
+            height=180, margin=dict(l=0, r=0, t=10, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=8))
         )
         fig_age.update_xaxes(title=None, showgrid=False)
         fig_age.update_yaxes(showgrid=False, visible=False)
@@ -353,13 +409,39 @@ with r3_1:
         st.caption("ไม่มีข้อมูลอายุ")
 
 with r3_2:
+    st.markdown("**📉 แนวโน้มกลุ่มเสี่ยงวิกฤต**")
+    if has_date and not valid_trend_data.empty and 'patient_id' in df_view.columns:
+        # นับ unique patient ต่อวันจริง (ทั้งหมด vs กลุ่มเสี่ยงวิกฤต) เพื่อดูแนวโน้ม % รายวัน
+        daily = valid_trend_data.groupby('visit_day').apply(
+            lambda g: pd.Series({
+                'total': g['patient_id'].nunique(),
+                'risk': g[g['critical_risk'] == 1]['patient_id'].nunique()
+            })
+        ).reset_index()
+        daily = daily.sort_values('visit_day')
+        daily['risk_pct'] = np.where(daily['total'] > 0, daily['risk'] / daily['total'] * 100, 0)
+        daily['label'] = daily['visit_day'].dt.strftime('%d %b')
+
+        fig_risk_trend = px.line(daily, x='label', y='risk_pct', markers=True)
+        fig_risk_trend.update_traces(line_color='#EF4444')
+        fig_risk_trend.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            height=180, margin=dict(l=0, r=0, t=10, b=0)
+        )
+        fig_risk_trend.update_xaxes(title=None, showgrid=False, categoryorder='array', categoryarray=daily['label'].tolist())
+        fig_risk_trend.update_yaxes(title="% เสี่ยงวิกฤต", gridcolor='#F1F5F9')
+        st.plotly_chart(fig_risk_trend, use_container_width=True)
+    else:
+        st.caption("ไม่มีข้อมูลวันที่เพียงพอสำหรับแนวโน้ม")
+
+with r3_3:
     st.markdown("**🎯 โอกาสนำเสนอแพ็กเกจตรวจสุขภาพ**")
     if clf is not None and 'patient_id' in df_view.columns:
         avail_pts = [p for p in summary_pts.index if p in df_view['patient_id'].values]
         if avail_pts:
             sel_pid = st.selectbox("เลือก Patient ID:", avail_pts[:40], label_visibility="collapsed")
             score = summary_pts.loc[sel_pid, 'lead_score']
-            
+
             card_bg = "#ECFDF5" if score >= 60 else "#F8FAFC"
             card_border = "#A7F3D0" if score >= 60 else "#E2E8F0"
             text_color = "#065F46" if score >= 60 else "#475569"
@@ -374,17 +456,19 @@ with r3_2:
                 <div style="font-size:0.75rem; font-weight:500; color:{text_color}; margin-top:2px;">{badge_text}</div>
             </div>
             """, unsafe_allow_html=True)
-            
+
             st.markdown(f"""
             <div style="font-size:0.73rem; color:#64748B; margin-top:6px;">
                 💼 กลุ่มเป้าหมายคะแนนสูงรวม: <b>{high_lead_count:,} ราย</b><br>
                 ประมาณการมูลค่าแพ็กเกจ: <b>~{est_pipeline_value:,.0f} บาท</b>
+                <span style="font-size:0.68rem;">({high_lead_count:,} ราย × 3,000 บาท/แพ็กเกจ)</span>
             </div>
             """, unsafe_allow_html=True)
+            st.caption("⚠️ คะแนนนี้อิงกฎ (visits≥3 หรือ systolic≥135) ไม่ใช่ประวัติการซื้อจริง ใช้เป็นตัวช่วยจัดลำดับความสำคัญ ไม่ใช่การพยากรณ์ทางสถิติ")
     else:
         st.caption("ไม่มีข้อมูลโมเดล")
 
-with r3_3:
+with r3_4:
     st.markdown("**⚡ สรุปทิศทางเพื่อการตัดสินใจ (Executive Actions)**")
     st.markdown(f"""
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:4px;">
@@ -402,3 +486,4 @@ with r3_3:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
