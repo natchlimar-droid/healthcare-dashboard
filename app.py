@@ -227,32 +227,46 @@ if df_view.empty:
     st.stop()
 
 # ============================================================
-# 4b. คำนวณ Period-over-Period Delta (ครึ่งแรก vs ครึ่งหลังของช่วงที่เลือก)
-#     ใช้แทนสตริงคงที่ เพื่อไม่ให้ st.metric แสดงลูกศรขึ้นแบบหลอกๆ
+# 4b. คำนวณ Period-over-Period Delta
+#     เทียบ "ช่วงที่เลือก" กับ "ช่วงก่อนหน้าที่มีความยาวเท่ากัน" (ไม่ใช่แบ่งครึ่งช่วงเดียวกัน
+#     ซึ่งพังง่ายเวลาข้อมูลกระจุกตัวในบางวัน) และมี minimum-sample guard: ถ้าช่วงก่อนหน้ามี
+#     ข้อมูลน้อยเกินไป จะไม่แสดง delta แทนที่จะโชว์ตัวเลข % ที่ผันผวนเกินจริงจาก sample เล็ก
 # ============================================================
+MIN_SAMPLE_FOR_DELTA = 5
+
 delta_visits_pct = delta_patients_pct = delta_risk_pct = None
-if has_date:
-    valid_dates_view = df_view['visit_date'].dropna()
-    if not valid_dates_view.empty and valid_dates_view.min() != valid_dates_view.max():
-        midpoint = valid_dates_view.min() + (valid_dates_view.max() - valid_dates_view.min()) / 2
-        prev_period = df_view[df_view['visit_date'] <= midpoint]
-        curr_period = df_view[df_view['visit_date'] > midpoint]
+compare_label = None
+delta_insufficient_sample = False
 
-        if len(prev_period) > 0:
-            delta_visits_pct = (len(curr_period) - len(prev_period)) / len(prev_period) * 100
+if has_date and date_filter and isinstance(date_filter, (list, tuple)) and len(date_filter) == 2:
+    # ใช้ตัวกรองโรค/เพศเดียวกัน แต่ไม่ผูกกับ date mask ของ df_view เพื่อดึงช่วงก่อนหน้าที่อยู่นอกช่วงที่เลือกได้
+    base_mask = df['disease_group'].isin(disease_sel) & df['gender'].isin(gender_sel)
 
-        if 'patient_id' in df_view.columns:
+    cur_start, cur_end = pd.Timestamp(date_filter[0]), pd.Timestamp(date_filter[1])
+    period_len = cur_end - cur_start
+    prev_end = cur_start - pd.Timedelta(days=1)
+    prev_start = prev_end - period_len
+
+    curr_period = df[base_mask & df['visit_date'].between(cur_start, cur_end)]
+    prev_period = df[base_mask & df['visit_date'].between(prev_start, prev_end)]
+    compare_label = f"เทียบ {period_len.days + 1} วันก่อนหน้า"
+
+    if len(prev_period) >= MIN_SAMPLE_FOR_DELTA:
+        delta_visits_pct = (len(curr_period) - len(prev_period)) / len(prev_period) * 100
+
+        if 'patient_id' in df.columns:
             prev_pts = prev_period['patient_id'].nunique()
             curr_pts = curr_period['patient_id'].nunique()
-            if prev_pts > 0:
+            if prev_pts >= MIN_SAMPLE_FOR_DELTA:
                 delta_patients_pct = (curr_pts - prev_pts) / prev_pts * 100
 
-            prev_risk = prev_period[prev_period['critical_risk'] == 1]['patient_id'].nunique()
-            curr_risk = curr_period[curr_period['critical_risk'] == 1]['patient_id'].nunique()
-            prev_risk_pct = (prev_risk / prev_pts * 100) if prev_pts else None
-            curr_risk_pct = (curr_risk / curr_pts * 100) if curr_pts else None
-            if prev_risk_pct is not None and curr_risk_pct is not None:
+                prev_risk = prev_period[prev_period['critical_risk'] == 1]['patient_id'].nunique()
+                curr_risk = curr_period[curr_period['critical_risk'] == 1]['patient_id'].nunique()
+                prev_risk_pct = (prev_risk / prev_pts * 100)
+                curr_risk_pct = (curr_risk / curr_pts * 100) if curr_pts else 0
                 delta_risk_pct = curr_risk_pct - prev_risk_pct  # จุดเปอร์เซ็นต์ (pp), ไม่ใช่ % เปลี่ยนแปลง
+    else:
+        delta_insufficient_sample = True
 
 # ============================================================
 # 5. One-Page Executive Dashboard
@@ -279,21 +293,27 @@ avg_bp = df_view[df_view['systolic'] > 0]['systolic'].mean()
 k1, k2, k3, k4 = st.columns(4)
 k1.metric(
     "TOTAL VISITS", f"{total_v:,}",
-    delta=f"{delta_visits_pct:+.1f}% เทียบครึ่งแรกของช่วง" if delta_visits_pct is not None else None,
+    delta=f"{delta_visits_pct:+.1f}% {compare_label}" if delta_visits_pct is not None else None,
     help="เคสรับบริการทั้งหมดในช่วงที่เลือก"
 )
 k2.metric(
     "ACTIVE PATIENTS", f"{unique_pts:,}",
-    delta=f"{delta_patients_pct:+.1f}% เทียบครึ่งแรกของช่วง" if delta_patients_pct is not None else None,
+    delta=f"{delta_patients_pct:+.1f}% {compare_label}" if delta_patients_pct is not None else None,
     help="คนไข้รายบุคคลในช่วงที่เลือก"
 )
 k3.metric("AVERAGE SYSTOLIC", f"{avg_bp:.1f} mmHg", help="เกณฑ์เฝ้าระวัง (120-139)")
 k4.metric(
     "CRITICAL RISK POOL", f"{risk_pct:.1f}%",
-    delta=f"{delta_risk_pct:+.1f} pp เทียบครึ่งแรกของช่วง" if delta_risk_pct is not None else f"{risk_pts:,} คน (ต้องเฝ้าระวัง)",
+    delta=f"{delta_risk_pct:+.1f} pp {compare_label}" if delta_risk_pct is not None else f"{risk_pts:,} คน (ต้องเฝ้าระวัง)",
     delta_color="inverse",
     help=f"{risk_pts:,} คน มี BMI≥25 และ Systolic≥140"
 )
+
+if delta_insufficient_sample:
+    st.caption(
+        f"ℹ️ ไม่แสดง % เปลี่ยนแปลงเทียบช่วงก่อนหน้า เพราะช่วงก่อนหน้ามีข้อมูลน้อยกว่า {MIN_SAMPLE_FOR_DELTA} เคส "
+        "(ไม่พอให้เทียบได้อย่างน่าเชื่อถือ)"
+    )
 
 st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
@@ -410,6 +430,8 @@ with r3_1:
 
 with r3_2:
     st.markdown("**📉 แนวโน้มกลุ่มเสี่ยงวิกฤต**")
+    MIN_SAMPLE_FOR_TREND = 5  # วันที่มีคนไข้น้อยกว่านี้จะไม่พล็อต % (กันเปอร์เซ็นต์เพี้ยนจาก sample เล็ก)
+
     if has_date and not valid_trend_data.empty and 'patient_id' in df_view.columns:
         # นับ unique patient ต่อวันจริง (ทั้งหมด vs กลุ่มเสี่ยงวิกฤต) เพื่อดูแนวโน้ม % รายวัน
         daily = valid_trend_data.groupby('visit_day').apply(
@@ -419,11 +441,19 @@ with r3_2:
             })
         ).reset_index()
         daily = daily.sort_values('visit_day')
-        daily['risk_pct'] = np.where(daily['total'] > 0, daily['risk'] / daily['total'] * 100, 0)
+
+        # วันที่มีคนไข้น้อยกว่า MIN_SAMPLE_FOR_TREND ให้เป็น NaN (เว้นช่องว่างในกราฟ)
+        # แทนที่จะคำนวณ % จาก sample เล็กจนแกว่งเกินจริง (เช่น 1 ใน 2 คน = 50%)
+        low_sample_days = int((daily['total'] < MIN_SAMPLE_FOR_TREND).sum())
+        daily['risk_pct'] = np.where(
+            daily['total'] >= MIN_SAMPLE_FOR_TREND,
+            np.where(daily['total'] > 0, daily['risk'] / daily['total'] * 100, 0),
+            np.nan
+        )
         daily['label'] = daily['visit_day'].dt.strftime('%d %b')
 
         fig_risk_trend = px.line(daily, x='label', y='risk_pct', markers=True)
-        fig_risk_trend.update_traces(line_color='#EF4444')
+        fig_risk_trend.update_traces(line_color='#EF4444', connectgaps=False)
         fig_risk_trend.update_layout(
             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
             height=180, margin=dict(l=0, r=0, t=10, b=0)
@@ -431,6 +461,8 @@ with r3_2:
         fig_risk_trend.update_xaxes(title=None, showgrid=False, categoryorder='array', categoryarray=daily['label'].tolist())
         fig_risk_trend.update_yaxes(title="% เสี่ยงวิกฤต", gridcolor='#F1F5F9')
         st.plotly_chart(fig_risk_trend, use_container_width=True)
+        if low_sample_days > 0:
+            st.caption(f"⚠️ {low_sample_days} วันมีคนไข้น้อยกว่า {MIN_SAMPLE_FOR_TREND} คน จึงเว้นช่องว่างไว้แทนการโชว์ % ที่ไม่น่าเชื่อถือ")
     else:
         st.caption("ไม่มีข้อมูลวันที่เพียงพอสำหรับแนวโน้ม")
 
