@@ -98,8 +98,6 @@ DISEASE_CONFIG = {
     }
 }
 
-}
-
 SPECIAL_SCREENINGS = {
     "Mammogram": {"price": 2000, "desc": "คัดกรองมะเร็งเต้านม"},
     "PSA (มะเร็งต่อมลูกหมาก)": {"price": 2000, "desc": "คัดกรองมะเร็งต่อมลูกหมาก"}
