@@ -48,6 +48,29 @@ BP_COLORS = {
 MIN_SAMPLE = 5
 SUNBURST_TOP_N = 5
 
+HEALTH_PACKAGES = {
+    "Essential Package": {
+        "price": 3000, 
+        "tests": ["CBC (ความสมบูรณ์ของเม็ดเลือด)", "FBS (น้ำตาลในเลือด)", "Lipid Profile (ไขมันในเลือด)", "Uric Acid (กรดยูริก)", "CXR (เอกซเรย์ปอด)", "EKG (คลื่นไฟฟ้าหัวใจ)"],
+        "desc": "เหมาะสำหรับวัยเริ่มต้นทำงานและผู้ที่ไม่มีความเสี่ยงหรือโรคประจำตัว (อายุ <30 ปี)"
+    },
+    "Advanced Package": {
+        "price": 5500,
+        "tests": ["Essential Tests +", "Liver Function (การทำงานของตับ)", "Kidney Function (การทำงานของไต)", "HbA1c (น้ำตาลสะสม)", "Urine Examination (ปัสสาวะ)", "Ultrasound Whole Abdomen (อัลตราซาวด์ช่องท้อง)"],
+        "desc": "เหมาะสำหรับวัยทำงานที่มีความเครียดสะสม พักผ่อนน้อย หรือเริ่มมีความเสี่ยง (อายุ 30-50 ปี)"
+    },
+    "Longevity Package": {
+        "price": 8000,
+        "tests": ["Advanced Tests +", "Thyroid Function (ไทรอยด์)", "Bone Densitometry (มวลกระดูก)", "Tumor Markers (สารบ่งชี้มะเร็งพื้นฐาน)", "ABI (การตีบตันของหลอดเลือด)"],
+        "desc": "เหมาะสำหรับผู้สูงอายุ หรือผู้ที่มีความเสี่ยงโรคเรื้อรัง ต้องการดูแลอย่างใกล้ชิด (อายุ >50 ปี)"
+    }
+}
+SPECIAL_SCREENINGS = {
+    "Mammogram": {"price": 2000, "desc": "คัดกรองมะเร็งเต้านม"},
+    "PSA (มะเร็งต่อมลูกหมาก)": {"price": 2000, "desc": "คัดกรองมะเร็งต่อมลูกหมาก"}
+}
+
+
 # ============================================================
 # Page config + CSS
 # ============================================================
@@ -843,43 +866,101 @@ with col_right:
                     <div style="font-size:0.75rem; font-weight:600; color:{c_tx}; background:#F8FAFC; padding:2px 6px; border-radius:6px; display:inline-block;">{badge}</div>
                 </div>
             </div>
-            <div style="text-align:right;">
-                <div style="font-size:0.7rem; color:{MUTED}; font-weight:600;">Health Score</div>
-                <div style="font-size:1.6rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.1;">{score}%</div>
-            </div>
           </div>
-          
-          <div style="background:#F0F9FF; border-left:4px solid #0284C7; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
-              <div style="font-size:0.7rem; color:#0284C7; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">💎 Recommended Package</div>
-              <div style="font-size:1.05rem; font-weight:700; color:{INK};">{pkg_name}</div>
-              <div style="font-size:0.85rem; font-weight:600; color:{MUTED}; font-family:'IBM Plex Mono',monospace;">Est. ฿ {total_price:,.0f}</div>
-          </div>
-          
-          <div style="font-size:0.78rem; font-weight:600; color:{INK}; margin-bottom:8px;">💡 AI Analysis Insights:</div>
-          <div style="margin-bottom:12px; line-height:1.6;">
-            {reasons_html}
-          </div>
-        </div>
         """, unsafe_allow_html=True)
         
-        st.markdown('<div class="action-btn" style="margin-top:14px;">', unsafe_allow_html=True)
-        if st.button("✨ Generate Personalized Proposal", use_container_width=True):
-            with st.spinner("กำลังเชื่อมต่อระบบ CRM/LINE API..."):
-                import time
-                time.sleep(1)
-                try:
-                    payload = {
-                        "patient_id": sel_pid,
-                        "health_score": score,
-                        "risk_level": badge,
-                        "recommended_package": pkg_name,
-                        "special_screening": screenings,
-                        "estimated_price": total_price
-                    }
-                    st.success(f"✅ ส่งข้อมูลให้ระบบเรียบร้อย! (Webhook API Mockup)\n\n**Package:** {pkg_name}\n**Add-on:** {', '.join(screenings) if screenings else 'ไม่มี'}")
-                except Exception as e:
-                    st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
+        
+        with tab1:
+            st.markdown(f"""
+            <div style="text-align:center; margin-bottom:16px;">
+                <div style="font-size:0.75rem; color:{MUTED}; font-weight:600;">Health Score</div>
+                <div style="font-size:2.5rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.1;">{score}%</div>
+            </div>
+            <div style="font-size:0.78rem; font-weight:600; color:{INK}; margin-bottom:8px;">💡 AI Analysis Insights:</div>
+            <div style="margin-bottom:12px; line-height:1.6;">
+                {reasons_html}
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with tab2:
+            # ดึงข้อมูลประวัติการวินิจฉัย
+            hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
+            if not hist_df.empty:
+                st.markdown('<div style="font-size:0.75rem; color:#5B6B6B; margin-bottom:8px;">Timeline การมารับบริการ</div>', unsafe_allow_html=True)
+                disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
+                disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
+                disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
+                
+                # Conditional Formatting 
+                def highlight_risk(row):
+                    if row["Risk"] == 1: return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+                    if pd.notna(row["Sys"]) and row["Sys"] >= 140: return ["background-color:#F8C6C0"] * len(row)
+                    if pd.notna(row["BMI"]) and row["BMI"] >= 25: return ["background-color:#FEF0C7"] * len(row)
+                    return [""] * len(row)
+                
+                st.dataframe(disp_hist.drop(columns=["Risk"]).style.apply(highlight_risk, axis=1), 
+                             use_container_width=True, hide_index=True, height=220)
+            else:
+                st.info("ไม่พบประวัติการรับบริการในระบบ")
+                
+        with tab3:
+            pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
+            st.markdown(f"""
+            <div style="background:#F0F9FF; border-left:4px solid #0284C7; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+                <div style="font-size:0.7rem; color:#0284C7; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Package หลัก</div>
+                <div style="font-size:1.05rem; font-weight:700; color:{INK};">{pkg_name}</div>
+                <div style="font-size:0.7rem; color:{MUTED}; margin-bottom:4px;">{pkg_info.get("desc", "")}</div>
+                <div style="font-size:0.85rem; font-weight:600; color:{MUTED}; font-family:'IBM Plex Mono',monospace;">฿ {pkg_info.get("price", 0):,.0f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Show Tests
+            if pkg_info.get("tests"):
+                st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-bottom:4px;">รายการตรวจหลัก:</div>', unsafe_allow_html=True)
+                for t in pkg_info["tests"]:
+                    st.markdown(f'<div style="font-size:0.7rem; color:#5B6B6B; padding-left:12px;">• {t}</div>', unsafe_allow_html=True)
+            
+            # Add-ons
+            if screenings:
+                st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-top:10px; margin-bottom:4px; color:#7E22CE;">🔍 Add-on เฉพาะบุคคล:</div>', unsafe_allow_html=True)
+                for sc in screenings:
+                    sp = SPECIAL_SCREENINGS.get(sc, {})
+                    st.markdown(f'<div style="font-size:0.7rem; color:#7E22CE; padding-left:12px;">+ {sc} (฿{sp.get("price", 0):,.0f})</div>', unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div style="text-align:right; margin-top:12px; padding-top:8px; border-top:1px dashed #CBD5E1;">
+                <span style="font-size:0.75rem; color:{MUTED};">รวมประเมินราคา: </span>
+                <span style="font-size:1.2rem; font-weight:700; color:{TEAL};">฿ {total_price:,.0f}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown('<div class="action-btn" style="margin-top:14px;">', unsafe_allow_html=True)
+            if st.button("✨ Generate Personalized Proposal", use_container_width=True):
+                with st.spinner("กำลังเชื่อมต่อระบบ CRM/LINE API..."):
+                    import time
+                    time.sleep(1)
+                    st.success("✅ ส่งข้อมูลให้ระบบเรียบร้อย! (Webhook API Mockup)")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Export Button
+            export_text = f"--- Personalized Health Proposal ---\nPatient ID: {sel_pid}\nAge: {pt_data['age_at_visit']:.0f}\nHealth Score: {score}%\nRisk Level: {badge}\n\nRecommended Package: {pkg_name} (฿{pkg_info.get('price', 0):,.0f})\nDescription: {pkg_info.get('desc', '')}\n"
+            if screenings:
+                export_text += f"\nAdd-on Screenings:\n"
+                for sc in screenings:
+                    sp = SPECIAL_SCREENINGS.get(sc, {})
+                    export_text += f"- {sc} (฿{sp.get('price', 0):,.0f})\n"
+            export_text += f"\nTotal Estimated Price: ฿{total_price:,.0f}\n"
+            
+            st.download_button(
+                label="📥 Export Summary (Text)",
+                data=export_text.encode('utf-8'),
+                file_name=f"proposal_{sel_pid}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+            
+        st.markdown('</div>', unsafe_allow_html=True) # ปิดกล่อง Card หลัก
     else:
         st.markdown(f"""
         <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:12px; padding:30px 16px; text-align:center; color:{MUTED};">
