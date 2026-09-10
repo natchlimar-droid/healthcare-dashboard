@@ -181,8 +181,8 @@ def load_data():
         df["age_at_visit"] = df["age_at_visit"].fillna(med_age if pd.notna(med_age) else 35.0)
         df["is_adult"] = df["age_at_visit"] >= 18
         df["age_group"] = pd.cut(
-            df["age_at_visit"], bins=[0,25,45,60,120],
-            labels=["<25 ปี","25-45 ปี","46-60 ปี",">60 ปี"]
+            df["age_at_visit"], bins=[0,29,39,49,59,120],
+            labels=["<30 ปี","30-40 ปี","40-50 ปี","50-60 ปี",">60 ปี"]
         ).astype(str).replace("nan","ไม่ระบุ")
         df["pyramid_group"] = pd.cut(
             df["age_at_visit"],
@@ -248,7 +248,7 @@ def build_scorer(data):
 
 summary_pts = high_lead_count = est_pipeline = clf = None
 if "patient_id" in df.columns:
-    agg_kwargs = {"bmi":("bmi","mean"), "systolic":("systolic","mean"), "gender_code":("gender_code","first")}
+    agg_kwargs = {"bmi":("bmi","mean"), "systolic":("systolic","mean"), "gender_code":("gender_code","first"), "age_at_visit":("age_at_visit","max")}
     if "visit_id" in df.columns:
         agg_kwargs["visits"] = ("visit_id","count")
     else:
@@ -585,33 +585,7 @@ st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 # ============================================================
 # Section 5 — Population Pyramid + Clinic + BMI-BP Scatter
 # ============================================================
-p1,p2,p3 = st.columns([1,1.1,1.2])
-
-with p1:
-    with st.container(key="card_pyramid"):
-        st.markdown('<div class="panel-title">👥 พีระมิดประชากรผู้ป่วย</div>', unsafe_allow_html=True)
-        age_order = ["0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+"]
-        pyr = dv.groupby(["pyramid_group","gender"]).size().reset_index(name="n")
-        m_s = pyr[pyr["gender"]=="ช"].set_index("pyramid_group")["n"]
-        f_s = pyr[pyr["gender"]=="ญ"].set_index("pyramid_group")["n"]
-        mv = [int(m_s.get(l,0)) for l in age_order]
-        fv = [int(f_s.get(l,0)) for l in age_order]
-        maxv = max(mv+fv) or 1
-        fig_pyr = go.Figure()
-        fig_pyr.add_trace(go.Bar(y=age_order,x=[-v for v in mv],name="ชาย",orientation="h",
-                                  marker_color=TEAL,customdata=mv,
-                                  hovertemplate="ชาย %{y}: %{customdata}<extra></extra>"))
-        fig_pyr.add_trace(go.Bar(y=age_order,x=fv,name="หญิง",orientation="h",
-                                  marker_color="#D97AA0",customdata=fv,
-                                  hovertemplate="หญิง %{y}: %{customdata}<extra></extra>"))
-        fig_pyr.update_layout(barmode="overlay",paper_bgcolor="rgba(0,0,0,0)",
-                               plot_bgcolor="rgba(0,0,0,0)",height=310,
-                               margin=dict(l=0,r=0,t=10,b=0),
-                               legend=dict(orientation="h",yanchor="bottom",y=1.02,font=dict(size=9)),
-                               xaxis=dict(tickvals=[-maxv,-maxv//2,0,maxv//2,maxv],
-                                          ticktext=[str(maxv),str(maxv//2),"0",str(maxv//2),str(maxv)],
-                                          gridcolor="#F1F5F9"))
-        st.plotly_chart(fig_pyr, use_container_width=True)
+p2,p3 = st.columns([1,1])
 
 with p2:
     with st.container(key="card_clinic"):
@@ -653,11 +627,46 @@ st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
 
 # ============================================================
-# Section 6 — Monthly Trends + Lead Scoring / Smart Recommender
+# Section 6 — Smart Package Recommender & Clinical Health Trends
 # ============================================================
+
+def recommend_package(row):
+    """ประเมินแพ็กเกจจากช่วงอายุและเพศ รวมถึงการคัดกรองพิเศษ"""
+    age = row.get("age_at_visit", 35)
+    gender_code = row.get("gender_code", 0.5)
+    
+    # 1. Base Package
+    if age >= 50:
+        pkg_name = "Longevity Package"
+        base_price = 8000
+    elif age >= 30:
+        pkg_name = "Advanced Package"
+        base_price = 5500
+    else:
+        pkg_name = "Essential Package"
+        base_price = 3000
+        
+    # 2. Special Screening
+    screenings = []
+    add_on_price = 0
+    
+    # หญิง (gender_code=1) อายุ >= 40 แนะนำ Mammogram
+    if gender_code > 0.5 and age >= 40:
+        screenings.append("Mammogram")
+        add_on_price += 2000
+        
+    # ชาย (gender_code=0) อายุ >= 50 แนะนำ PSA
+    if gender_code < 0.5 and age >= 50:
+        screenings.append("PSA (มะเร็งต่อมลูกหมาก)")
+        add_on_price += 2000
+        
+    return pkg_name, base_price, screenings, add_on_price
+
+
 def analyze_patient_risk(row):
     """
     คำนวณ Health Score (0-100%) จากข้อมูลความดัน (BP), น้ำหนัก (BMI) และความถี่ในการพบแพทย์
+    และเพิ่มคำแนะนำแพ็กเกจ
     """
     score = 100
     reasons = []
@@ -693,171 +702,194 @@ def analyze_patient_risk(row):
         score -= 5
         reasons.append(f"<span style='background:#F1F5F9; color:#475569; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มีประวัติมาซ้ำ ({visits_val:.0f} ครั้ง)</span>")
         
+    # แนะนำแพ็กเกจและเพิ่ม Insight
+    pkg_name, base_price, screenings, add_on_price = recommend_package(row)
+    
+    if screenings:
+        score -= 5
+        for sc in screenings:
+            reasons.append(f"<span style='background:#F3E8FF; color:#7E22CE; border:1px solid #D8B4FE; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🎗️ แนะนำ {sc}</span>")
+
     if not reasons:
         reasons.append(f"<span style='background:#ECFDF5; color:#065F46; padding:4px 8px; border-radius:12px; font-size:0.7rem; display:inline-block; margin-bottom:4px;'>✅ สุขภาพอยู่ในเกณฑ์ปกติ</span>")
         
-    return max(0, score), "".join(reasons)
+    return max(0, score), "".join(reasons), pkg_name, base_price + add_on_price, screenings
 
-t1,t2 = st.columns([1.5,1])
 
-with t1:
-    with st.container(key="card_trend"):
-        st.markdown('<div class="panel-title">📅 แนวโน้มรายเดือน</div>', unsafe_allow_html=True)
+col_left, col_right = st.columns([1.6, 1])
 
-        if monthly_df is not None and not monthly_df.empty:
-            m_fil = monthly_df[monthly_df["year_month"].isin(month_sel or all_months)]
-            m_agg = m_fil.groupby("year_month").agg(total=("visit_count","sum")).reset_index().sort_values("year_month")
-            fig_tr = px.line(m_agg, x="year_month", y="total", markers=True, text="total",
-                              labels={"year_month":"เดือน","total":"จำนวน Visit"},
-                              color_discrete_sequence=[TEAL])
-            fig_tr.update_traces(textposition="top center", marker_size=8)
+with col_left:
+    st.markdown('<div class="panel-title">📈 Clinical Health Trend by Age</div>', unsafe_allow_html=True)
+    c_tab1, c_tab2, c_tab3 = st.tabs(["📊 Age-Risk Stacked Bar", "🎯 Conversion Donut", "👥 Population Pyramid"])
+    
+    with c_tab1:
+        # Age-Risk Stacked Bar
+        risk_age = dv.groupby(["age_group", "critical_risk"]).size().reset_index(name="n")
+        risk_age["Risk Level"] = risk_age["critical_risk"].map({0: "ปกติ/เฝ้าระวัง", 1: "High Risk"})
+        if not risk_age.empty:
+            fig_bar = px.bar(risk_age, x="age_group", y="n", color="Risk Level", barmode="stack",
+                             color_discrete_map={"ปกติ/เฝ้าระวัง": SAGE, "High Risk": RED},
+                             labels={"age_group": "ช่วงอายุ", "n": "จำนวนคนไข้"})
+            fig_bar.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                                  height=260, margin=dict(l=0, r=0, t=10, b=0),
+                                  legend=dict(orientation="h", yanchor="bottom", y=1.02))
+            fig_bar.update_xaxes(categoryorder="array", categoryarray=["<30 ปี","30-40 ปี","40-50 ปี","50-60 ปี",">60 ปี"], gridcolor="#F1F5F9")
+            fig_bar.update_yaxes(gridcolor="#F1F5F9")
+            st.plotly_chart(fig_bar, use_container_width=True)
         else:
-            fb = dv.groupby("year_month").agg(total=("visit_id","count")).reset_index().sort_values("year_month") \
-                 if "visit_id" in dv.columns else \
-                 dv.groupby("year_month").size().reset_index(name="total").sort_values("year_month")
-            fig_tr = px.line(fb, x="year_month", y="total", markers=True,
-                              labels={"year_month":"เดือน","total":"จำนวน Visit"},
-                              color_discrete_sequence=[TEAL])
+            st.info("ไม่มีข้อมูล Risk แยกตามอายุ")
+            
+    with c_tab2:
+        # Conversion Potential Donut
+        if summary_pts is not None and "age_at_visit" in summary_pts.columns:
+            def est_pkg(age):
+                if age >= 50: return "Longevity (>50)"
+                elif age >= 30: return "Advanced (30-50)"
+                return "Essential (<30)"
+            summary_pts["pkg_type"] = summary_pts["age_at_visit"].apply(est_pkg)
+            pkg_counts = summary_pts["pkg_type"].value_counts().reset_index()
+            pkg_counts.columns = ["Package", "Count"]
+            
+            fig_don = px.pie(pkg_counts, names="Package", values="Count", hole=0.55,
+                             color="Package", color_discrete_map={
+                                 "Longevity (>50)": AMBER,
+                                 "Advanced (30-50)": TEAL,
+                                 "Essential (<30)": "#2F6FB5"
+                             })
+            fig_don.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=260,
+                                  margin=dict(l=0, r=0, t=10, b=0),
+                                  legend=dict(orientation="v", yanchor="middle", y=0.5, x=1.0))
+            st.plotly_chart(fig_don, use_container_width=True)
+            
+            # Text summary
+            st.markdown(f"""
+            <div style="text-align:center; font-size:0.8rem; color:{MUTED}; margin-top:-10px;">
+                มูลค่าคาดการณ์ (Base): <span style="color:{TEAL}; font-weight:700;">฿ {(pkg_counts[pkg_counts["Package"]=="Longevity (>50)"]["Count"].sum() * 8000 + pkg_counts[pkg_counts["Package"]=="Advanced (30-50)"]["Count"].sum() * 5500 + pkg_counts[pkg_counts["Package"]=="Essential (<30)"]["Count"].sum() * 3000):,.0f}</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("ไม่มีข้อมูลผู้ป่วยที่สรุปได้")
+            
+    with c_tab3:
+        # Population Pyramid
+        age_order = ["0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+"]
+        pyr = dv.groupby(["pyramid_group","gender"]).size().reset_index(name="n")
+        m_s = pyr[pyr["gender"]=="ช"].set_index("pyramid_group")["n"]
+        f_s = pyr[pyr["gender"]=="ญ"].set_index("pyramid_group")["n"]
+        mv = [int(m_s.get(l,0)) for l in age_order]
+        fv = [int(f_s.get(l,0)) for l in age_order]
+        maxv = max(mv+fv) or 1
+        fig_pyr = go.Figure()
+        fig_pyr.add_trace(go.Bar(y=age_order,x=[-v for v in mv],name="ชาย",orientation="h",
+                                  marker_color=TEAL,customdata=mv,
+                                  hovertemplate="ชาย %{y}: %{customdata}<extra></extra>"))
+        fig_pyr.add_trace(go.Bar(y=age_order,x=fv,name="หญิง",orientation="h",
+                                  marker_color="#D97AA0",customdata=fv,
+                                  hovertemplate="หญิง %{y}: %{customdata}<extra></extra>"))
+        fig_pyr.update_layout(barmode="overlay",paper_bgcolor="rgba(0,0,0,0)",
+                               plot_bgcolor="rgba(0,0,0,0)",height=260,
+                               margin=dict(l=0,r=0,t=10,b=0),
+                               legend=dict(orientation="h",yanchor="bottom",y=1.02,font=dict(size=9)),
+                               xaxis=dict(tickvals=[-maxv,-maxv//2,0,maxv//2,maxv],
+                                          ticktext=[str(maxv),str(maxv//2),"0",str(maxv//2),str(maxv)],
+                                          gridcolor="#F1F5F9"))
+        st.plotly_chart(fig_pyr, use_container_width=True)
 
-        fig_tr.update_layout(paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-                              height=260,margin=dict(l=0,r=0,t=10,b=0))
-        fig_tr.update_xaxes(gridcolor="#F1F5F9")
-        fig_tr.update_yaxes(gridcolor="#F1F5F9")
-        st.plotly_chart(fig_tr, use_container_width=True)
+    st.markdown("<div style='height:15px;'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="panel-title">🔍 เลือกผู้ป่วยเพื่อประเมิน Package (Search & Select)</div>', unsafe_allow_html=True)
+    
+    if summary_pts is not None and "patient_id" in dv.columns:
+        avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
+        if not avail_df.empty:
+            selection = st.dataframe(
+                avail_df[["patient_id", "age_at_visit", "visits", "bmi", "systolic"]].rename(
+                    columns={"patient_id": "Patient ID", "age_at_visit": "Age", "visits": "Visits", "bmi": "BMI", "systolic": "Systolic"}
+                ),
+                use_container_width=True,
+                hide_index=True,
+                height=220,
+                on_select="rerun",
+                selection_mode="single-row"
+            )
+            sel_idx = selection.selection.rows
+        else:
+            sel_idx = []
+    else:
+        avail_df = None
+        sel_idx = []
 
-        # ผู้รับบริการมาซ้ำ
-        if monthly_df is not None and not monthly_df.empty:
-            m_fil2 = monthly_df[monthly_df["year_month"].isin(month_sel or all_months)].copy()
-            m_fil2["ประเภท"] = m_fil2["visit_count"].apply(lambda x: "มาซ้ำ (≥2)" if x>=2 else "มาครั้งเดียว")
-            ts = m_fil2.groupby(["year_month","ประเภท"]).size().reset_index(name="n").sort_values("year_month")
-            fig_ts = px.bar(ts, x="year_month", y="n", color="ประเภท", barmode="stack",
-                             labels={"year_month":"เดือน","n":"ผู้รับบริการ"},
-                             color_discrete_map={"มาครั้งเดียว":SAGE,"มาซ้ำ (≥2)":RED})
-            fig_ts.update_layout(paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-                                  height=220,margin=dict(l=0,r=0,t=10,b=0))
-            st.plotly_chart(fig_ts, use_container_width=True)
-
-with t2:
-    with st.container(key="card_lead"):
-        st.markdown('<div class="panel-title">🎯 Smart Package Recommender</div>', unsafe_allow_html=True)
-        if summary_pts is not None and "patient_id" in dv.columns:
-            avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
-            if not avail_df.empty:
-                
-                # 1. Data Scalability: ค้นหาและเลือกผู้ป่วยผ่าน DataFrame
-                st.markdown('<div style="font-size:0.75rem; color:#5B6B6B; margin-bottom:4px;">🔍 ค้นหาและคลิกเลือกผู้ป่วย (Search & Select)</div>', unsafe_allow_html=True)
-                
-                import json
-                
-                selection = st.dataframe(
-                    avail_df[["patient_id", "visits", "bmi", "systolic"]].rename(
-                        columns={"patient_id": "Patient ID", "visits": "Visits", "bmi": "BMI", "systolic": "Systolic"}
-                    ),
-                    use_container_width=True,
-                    hide_index=True,
-                    height=180,
-                    on_select="rerun",
-                    selection_mode="single-row"
-                )
-                
-                sel_idx = selection.selection.rows
-                
-                if sel_idx:
-                    sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
-                    pt_data = summary_pts.loc[sel_pid]
-                    
-                    # 2. Clinical Scoring & Recommendation
-                    score, reasons_html = analyze_patient_risk(pt_data)
-                    
-                    gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
-                    
-                    # จัดระดับความเสี่ยง
-                    if score <= 60:
-                        c_tx, badge = "#B3261E", "🚨 High Risk"
-                    elif score <= 80:
-                        c_tx, badge = "#B54708", "⚠️ Medium Risk"
-                    else:
-                        c_tx, badge = "#065F46", "🌱 Low Risk"
-                        
-                    # Patient Profile Card
-                    st.markdown(f"""
-                    <div style="background:{SURFACE}; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-top:12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-                      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
-                        <div style="display:flex; align-items:center; gap:12px;">
-                            <div style="font-size:2.2rem; background:#F1F5F9; border-radius:50%; width:48px; height:48px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
-                            <div>
-                                <div style="font-weight:700; color:{INK}; font-size:1.05rem;">{sel_pid}</div>
-                                <div style="font-size:0.75rem; font-weight:600; color:{c_tx};">{badge}</div>
-                            </div>
-                        </div>
-                        <div style="text-align:right;">
-                            <div style="font-size:0.7rem; color:{MUTED}; font-weight:600;">Health Score</div>
-                            <div style="font-size:1.4rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.2;">{score}%</div>
-                        </div>
-                      </div>
-                      
-                      <div style="font-size:0.75rem; font-weight:600; color:{INK}; margin-bottom:6px;">💡 AI Analysis Insights:</div>
-                      <div style="margin-bottom:10px;">
-                        {reasons_html}
-                      </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # 3. Actionable API Integration
-                    st.markdown('<div class="action-btn" style="margin-top:12px;">', unsafe_allow_html=True)
-                    if st.button("✨ Generate Personalized Proposal", use_container_width=True):
-                        with st.spinner("กำลังเชื่อมต่อระบบ API และสร้าง Proposal..."):
-                            time.sleep(1) # จำลองเวลาประมวลผล
-                            try:
-                                import requests
-                                # Mockup Webhook / API Call
-                                payload = {
-                                    "patient_id": sel_pid,
-                                    "health_score": score,
-                                    "risk_level": badge,
-                                    "recommended_action": "Comprehensive Health Screening" if score <= 60 else "Basic Checkup"
-                                }
-                                # res = requests.post("https://api.hospital.com/webhook/proposal", json=payload, timeout=3)
-                                st.success(f"✅ ส่งข้อมูล {sel_pid} ไปยัง Webhook สำเร็จ! (API Mockup)")
-                            except Exception as e:
-                                st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API: {e}")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                else:
-                    st.info("👆 คลิกเลือกผู้ป่วยในตารางเพื่อดู Profile และสร้าง Proposal")
-                    
-                # Conversion Estimation / Opportunity Potential (คำนวณจาก High Risk ในข้อมูล)
-                st.markdown(f"""
-                <div style="background:#F8FAFC; border-radius:8px; padding:12px; margin-top:16px; border:1px solid #E2E8F0;">
-                  <div style="font-size:0.75rem; color:{MUTED}; font-weight:600; margin-bottom:4px;">🎯 Opportunity Potential (กลุ่ม High Risk)</div>
-                  <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                      <span style="font-size:0.85rem; color:{INK};">เป้าหมาย: <b>{high_lead_count:,} ราย</b></span>
-                      <span style="font-size:1.15rem; font-weight:700; color:{TEAL}; font-family:'IBM Plex Mono',monospace;">฿ {est_pipeline:,.0f}</span>
-                  </div>
-                  <div style="font-size:0.65rem; color:{MUTED}; margin-top:2px; text-align:right;">(คำนวณจากแพ็กเกจพื้นฐาน 3,000 ฿/ราย)</div>
+with col_right:
+    st.markdown('<div class="panel-title">📋 Patient Profile & Recommendation</div>', unsafe_allow_html=True)
+    
+    if sel_idx and avail_df is not None:
+        sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
+        pt_data = summary_pts.loc[sel_pid]
+        
+        score, reasons_html, pkg_name, total_price, screenings = analyze_patient_risk(pt_data)
+        gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
+        
+        if score <= 60: c_tx, badge = "#B3261E", "🚨 High Risk"
+        elif score <= 80: c_tx, badge = "#B54708", "⚠️ Medium Risk"
+        else: c_tx, badge = "#065F46", "🌱 Low Risk"
+            
+        st.markdown(f"""
+        <div style="background:{SURFACE}; border:1px solid #E2E8F0; border-radius:12px; padding:18px; margin-top:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:14px;">
+                <div style="font-size:2.4rem; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:50%; width:54px; height:54px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
+                <div>
+                    <div style="font-weight:700; color:{INK}; font-size:1.15rem;">{sel_pid}</div>
+                    <div style="font-size:0.75rem; color:{MUTED}; margin-bottom:2px;">อายุ: {pt_data['age_at_visit']:.0f} ปี</div>
+                    <div style="font-size:0.75rem; font-weight:600; color:{c_tx}; background:#F8FAFC; padding:2px 6px; border-radius:6px; display:inline-block;">{badge}</div>
                 </div>
-                """, unsafe_allow_html=True)
-                
-        else:
-            st.caption("ไม่มีข้อมูล patient_id")
-
-    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-
-    # Top patient มาซ้ำ
-    if monthly_df is not None:
-        with st.container(key="card_top_pts"):
-            st.markdown('<div class="panel-title">🔁 Patient มาบ่อยในเดือนเดียว</div>', unsafe_allow_html=True)
-            top_p = (monthly_df[monthly_df["visit_count"]>=2]
-                     .sort_values(["visit_count","year_month"],ascending=[False,True])
-                     .head(12)[["patient_id","year_month","visit_count","first_visit","last_visit"]]
-                     .rename(columns={"patient_id":"ID","year_month":"เดือน",
-                                       "visit_count":"ครั้ง","first_visit":"วันแรก","last_visit":"วันสุดท้าย"}))
-            if not top_p.empty:
-                st.dataframe(top_p, use_container_width=True, hide_index=True, height=280)
-            else:
-                st.info("ไม่มี patient มาซ้ำในเดือนเดียว")
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.7rem; color:{MUTED}; font-weight:600;">Health Score</div>
+                <div style="font-size:1.6rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.1;">{score}%</div>
+            </div>
+          </div>
+          
+          <div style="background:#F0F9FF; border-left:4px solid #0284C7; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+              <div style="font-size:0.7rem; color:#0284C7; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">💎 Recommended Package</div>
+              <div style="font-size:1.05rem; font-weight:700; color:{INK};">{pkg_name}</div>
+              <div style="font-size:0.85rem; font-weight:600; color:{MUTED}; font-family:'IBM Plex Mono',monospace;">Est. ฿ {total_price:,.0f}</div>
+          </div>
+          
+          <div style="font-size:0.78rem; font-weight:600; color:{INK}; margin-bottom:8px;">💡 AI Analysis Insights:</div>
+          <div style="margin-bottom:12px; line-height:1.6;">
+            {reasons_html}
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('<div class="action-btn" style="margin-top:14px;">', unsafe_allow_html=True)
+        if st.button("✨ Generate Personalized Proposal", use_container_width=True):
+            with st.spinner("กำลังเชื่อมต่อระบบ CRM/LINE API..."):
+                import time
+                time.sleep(1)
+                try:
+                    payload = {
+                        "patient_id": sel_pid,
+                        "health_score": score,
+                        "risk_level": badge,
+                        "recommended_package": pkg_name,
+                        "special_screening": screenings,
+                        "estimated_price": total_price
+                    }
+                    st.success(f"✅ ส่งข้อมูลให้ระบบเรียบร้อย! (Webhook API Mockup)\n\n**Package:** {pkg_name}\n**Add-on:** {', '.join(screenings) if screenings else 'ไม่มี'}")
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API: {e}")
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:12px; padding:30px 16px; text-align:center; color:{MUTED};">
+            <div style="font-size:2rem; margin-bottom:10px;">👈</div>
+            <div style="font-size:0.9rem; font-weight:600;">คลิกเลือกผู้ป่วยจากตารางด้านซ้าย</div>
+            <div style="font-size:0.8rem; margin-top:4px;">เพื่อดู Health Score และการแนะนำแพ็กเกจที่เหมาะสม</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.divider()
-
 
 # ============================================================
 # Section 7 — Raw Data
