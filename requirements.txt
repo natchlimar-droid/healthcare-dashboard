@@ -1,6 +1,6 @@
 streamlit
 pandas
 plotly
-scikit-learn
+openpyxl
 numpy
-streamlit-aggrid
+scikit-learn
