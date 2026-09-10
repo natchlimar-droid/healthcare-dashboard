@@ -899,8 +899,9 @@ with col_right:
                     if pd.notna(row["BMI"]) and row["BMI"] >= 25: return ["background-color:#FEF0C7"] * len(row)
                     return [""] * len(row)
                 
-                st.dataframe(disp_hist.drop(columns=["Risk"]).style.apply(highlight_risk, axis=1), 
-                             use_container_width=True, hide_index=True, height=220)
+                st.dataframe(disp_hist.style.apply(highlight_risk, axis=1), 
+                             use_container_width=True, hide_index=True, height=220,
+                             column_config={"Risk": None})
             else:
                 st.info("ไม่พบประวัติการรับบริการในระบบ")
                 
