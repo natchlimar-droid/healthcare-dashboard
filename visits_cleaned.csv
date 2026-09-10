@@ -1,4 +1,4 @@
-record_no,visit_date,visit_time,visit_id,patient_id,gender,age_at_visit,clinic_name,diagnosis_text,bp_raw,height_cm,weight_kg,bmi,systolic_bp,diastolic_bp,disease_group
+﻿record_no,visit_date,visit_time,visit_id,patient_id,gender,age_at_visit,clinic_name,diagnosis_text,bp_raw,height_cm,weight_kg,bmi,systolic_bp,diastolic_bp,disease_group
 1,2026-06-01,00:13:12,4,P000001,ญ,29.0,อายุรกรรม-ER,:,155.00 / 96.00,170.0,63.0,21.8,155,96,อื่น ๆ
 2,2026-06-01,00:16:41,5,P000002,ช,42.0,ฉุกเฉินอุบัติเหตุ-ER-SUR,S913 : แผลเปิดที่ส่วนของเท้า,115.00 / 78.00,83.0,180.0,,115,78,อื่น ๆ
 4,2026-06-01,00:19:13,6,P000003,ญ,20.0,อายุรกรรม-ER,N938 : เลือดออกผิดปกติจากมดลูกและช่องคลอด,122.00 / 66.00,156.0,56.85,23.36,122,66,อื่น ๆ

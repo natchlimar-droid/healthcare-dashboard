@@ -47,6 +47,9 @@ def load_data():
     except FileNotFoundError:
         visits_monthly = visits.copy()
 
+    # ทำความสะอาดชื่อคอลัมน์ (ตัด trailing whitespace)
+    visits.columns = visits.columns.str.strip()
+
     # แปลงประเภท
     visits["visit_date"] = pd.to_datetime(visits["visit_date"], errors="coerce")
     visits["year_month"] = visits["visit_date"].dt.to_period("M").astype(str)
@@ -55,6 +58,18 @@ def load_data():
     for col in num_cols:
         if col in visits.columns:
             visits[col] = pd.to_numeric(visits[col], errors="coerce")
+
+    # Fallback: สร้าง systolic_bp / diastolic_bp จาก bp_raw ถ้าคอลัมน์ว่างทั้งหมด
+    if "bp_raw" in visits.columns:
+        if "systolic_bp" not in visits.columns or visits["systolic_bp"].isna().all():
+            bp_split = visits["bp_raw"].astype(str).str.replace(",", "", regex=False).str.extract(
+                r"^\s*(\d{1,4}(?:\.\d+)?)\s*/\s*(\d{1,4}(?:\.\d+)?)\s*$"
+            )
+            visits["systolic_bp"] = pd.to_numeric(bp_split[0], errors="coerce")
+            visits["diastolic_bp"] = pd.to_numeric(bp_split[1], errors="coerce")
+            # range check
+            visits.loc[~visits["systolic_bp"].between(60, 250), "systolic_bp"] = float("nan")
+            visits.loc[~visits["diastolic_bp"].between(30, 150), "diastolic_bp"] = float("nan")
 
     if monthly is not None:
         monthly["visit_count"] = pd.to_numeric(monthly["visit_count"], errors="coerce")
@@ -89,13 +104,22 @@ sel_genders = st.sidebar.multiselect(
     "เพศ", gender_options, default=gender_options, key="genders"
 )
 
-# Apply filters
+# Apply filters (guard: ถ้า multiselect ว่าง ให้ใช้ทั้งหมด)
+months_filter = sel_months if sel_months else all_months
+diseases_filter = sel_diseases if sel_diseases else all_diseases
+clinics_filter = sel_clinics if sel_clinics else all_clinics
+genders_filter = sel_genders if sel_genders else gender_options
+
 df = visits_raw[
-    visits_raw["year_month"].isin(sel_months) &
-    visits_raw["disease_group"].isin(sel_diseases) &
-    visits_raw["clinic_name"].isin(sel_clinics) &
-    visits_raw["gender"].isin(sel_genders)
+    visits_raw["year_month"].isin(months_filter) &
+    visits_raw["disease_group"].isin(diseases_filter) &
+    visits_raw["clinic_name"].isin(clinics_filter) &
+    visits_raw["gender"].isin(genders_filter)
 ].copy()
+
+if df.empty:
+    st.warning("ไม่มีข้อมูลที่ตรงกับตัวกรองที่เลือก — กรุณาปรับตัวกรอง")
+    st.stop()
 
 # -------------------------------------------------------
 # Header
