@@ -50,8 +50,11 @@ st.markdown(f"""
     .stApp {{ background-color: {BG}; }}
     .block-container {{ padding-top: 1.1rem !important; padding-bottom: 2rem !important; max-width: 98% !important; }}
 
-    /* Floating card look: shadow แทน border หนาๆ ตามที่ขอ */
-    div[data-testid="stMetric"], .float-card, .agrid-wrap {{
+    /* Floating card look: shadow แทน border หนาๆ ตามที่ขอ
+       ใช้ st.container(key="card_...") แทนการเปิด/ปิด <div> คนละ st.markdown() —
+       เพราะ Streamlit render แต่ละ st.markdown() เป็นก้อนแยกกัน เปิดปิด div ข้าม call
+       จะเจอปัญหากล่องขาว/ว่างเปล่า (เบราว์เซอร์ auto-close tag ที่ไม่ครบในแต่ละก้อน) */
+    div[data-testid="stMetric"], .agrid-wrap, [class*="st-key-card_"] {{
         background: {SURFACE}; border-radius: 14px; padding: 16px 18px;
         border: none; box-shadow: 0 2px 10px rgba(11,27,43,0.06);
     }}
@@ -401,19 +404,18 @@ def quality_meter(label, pct, note):
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown('<div class="float-card">', unsafe_allow_html=True)
-st.markdown('<div class="panel-title">📊 Data Quality Indicator</div>', unsafe_allow_html=True)
-st.markdown('<div class="panel-sub">สถานะความสมบูรณ์ของข้อมูลที่ใช้คำนวณตัวเลขในหน้านี้ — ดูก่อนเชื่อตัวเลข 100%</div>', unsafe_allow_html=True)
-q1, q2, q3, q4 = st.columns(4)
-with q1:
-    quality_meter("ข้อมูลความดันครบถ้วน", 100 - missing_bp_share, "systolic_bp/diastolic_bp ต้นฉบับว่างเปล่า ใช้ bp_raw แทน")
-with q2:
-    quality_meter("การกระจายของวันบันทึก", 100 - single_day_share, f"{single_day_share:.0f}% กระจุกวันเดียว ใช้ระวังตีความเทรนด์")
-with q3:
-    quality_meter("ครอบคลุมกลุ่มผู้ใหญ่", 100 - pediatric_share, f"{pediatric_share:.1f}% เป็นเด็ก ไม่รวมเกณฑ์ BMI ผู้ใหญ่")
-with q4:
-    quality_meter("การจัดหมวดโรคสำเร็จ", 100 - uncoded_share, f"{uncoded_share:.0f}% ยังอยู่ในหมวด 'อื่น ๆ' ดูราย diagnosis ในผัง Sunburst")
-st.markdown('</div>', unsafe_allow_html=True)
+with st.container(key="card_dq"):
+    st.markdown('<div class="panel-title">📊 Data Quality Indicator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel-sub">สถานะความสมบูรณ์ของข้อมูลที่ใช้คำนวณตัวเลขในหน้านี้ — ดูก่อนเชื่อตัวเลข 100%</div>', unsafe_allow_html=True)
+    q1, q2, q3, q4 = st.columns(4)
+    with q1:
+        quality_meter("ข้อมูลความดันครบถ้วน", 100 - missing_bp_share, "systolic_bp/diastolic_bp ต้นฉบับว่างเปล่า ใช้ bp_raw แทน")
+    with q2:
+        quality_meter("การกระจายของวันบันทึก", 100 - single_day_share, f"{single_day_share:.0f}% กระจุกวันเดียว ใช้ระวังตีความเทรนด์")
+    with q3:
+        quality_meter("ครอบคลุมกลุ่มผู้ใหญ่", 100 - pediatric_share, f"{pediatric_share:.1f}% เป็นเด็ก ไม่รวมเกณฑ์ BMI ผู้ใหญ่")
+    with q4:
+        quality_meter("การจัดหมวดโรคสำเร็จ", 100 - uncoded_share, f"{uncoded_share:.0f}% ยังอยู่ในหมวด 'อื่น ๆ' ดูราย diagnosis ในผัง Sunburst")
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
@@ -437,162 +439,157 @@ def build_sunburst_data(data, top_n=SUNBURST_TOP_N):
     return pd.DataFrame(frames), top_labels_by_group
 
 with hero_l:
-    st.markdown('<div class="float-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">🔬 โครงสร้างการวินิจฉัยจริง — คลิกเพื่อเจาะลึก</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="panel-sub">{uncoded_share:.0f}% ของเคสอยู่ใน "อื่น ๆ" — คลิกวงในเพื่อดูกลุ่มโรค หรือวงนอกเพื่อดูรหัสวินิจฉัยที่แท้จริง</div>', unsafe_allow_html=True)
+    with st.container(key="card_sunburst"):
+        st.markdown('<div class="panel-title">🔬 โครงสร้างการวินิจฉัยจริง — คลิกเพื่อเจาะลึก</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="panel-sub">{uncoded_share:.0f}% ของเคสอยู่ใน "อื่น ๆ" — คลิกวงในเพื่อดูกลุ่มโรค หรือวงนอกเพื่อดูรหัสวินิจฉัยที่แท้จริง</div>', unsafe_allow_html=True)
 
-    sun_df, top_labels_by_group = build_sunburst_data(df_view)
-    if not sun_df.empty:
-        fig_sun = px.sunburst(sun_df, path=['disease_group', 'diagnosis'], values='count',
-                               color='disease_group', color_discrete_map=DISEASE_COLORS)
-        fig_sun.update_layout(margin=dict(l=0, r=0, t=6, b=6), height=420, paper_bgcolor='rgba(0,0,0,0)')
-        fig_sun.update_traces(textfont_size=11, insidetextorientation='radial')
+        sun_df, top_labels_by_group = build_sunburst_data(df_view)
+        if not sun_df.empty:
+            fig_sun = px.sunburst(sun_df, path=['disease_group', 'diagnosis'], values='count',
+                                   color='disease_group', color_discrete_map=DISEASE_COLORS)
+            fig_sun.update_layout(margin=dict(l=0, r=0, t=6, b=6), height=420, paper_bgcolor='rgba(0,0,0,0)')
+            fig_sun.update_traces(textfont_size=11, insidetextorientation='radial')
 
-        click = st.plotly_chart(fig_sun, use_container_width=True, on_select="rerun",
-                                 selection_mode="points", key="sunburst_click")
+            click = st.plotly_chart(fig_sun, use_container_width=True, on_select="rerun",
+                                     selection_mode="points", key="sunburst_click")
 
-        selected_label, selected_group = None, None
-        if click and click.selection and click.selection.get("points"):
-            pt = click.selection["points"][0]
-            selected_label = pt.get("label")
-            selected_group = pt.get("parent") or selected_label
+            selected_label, selected_group = None, None
+            if click and click.selection and click.selection.get("points"):
+                pt = click.selection["points"][0]
+                selected_label = pt.get("label")
+                selected_group = pt.get("parent") or selected_label
 
-        if selected_label:
-            if selected_label in DISEASE_COLORS:  # คลิกวงใน (disease_group)
-                drill_df = df_view[df_view['disease_group'] == selected_label]
-                st.markdown(f'<div class="drill-banner">🔍 กำลังดูกลุ่ม: {selected_label} · {drill_df["patient_id"].nunique() if "patient_id" in drill_df.columns else len(drill_df)} ราย</div>', unsafe_allow_html=True)
-            elif selected_label == 'อื่นๆ ในกลุ่มนี้':
-                rest_labels = top_labels_by_group.get(selected_group, [])
-                drill_df = df_view[(df_view['disease_group'] == selected_group) & (~df_view['diagnosis_clean'].isin(rest_labels))]
-                st.markdown(f'<div class="drill-banner">🔍 กำลังดู: รหัสวินิจฉัยอื่นๆ ในกลุ่ม {selected_group} · {len(drill_df)} เคส</div>', unsafe_allow_html=True)
-            else:  # คลิกรหัสวินิจฉัยเฉพาะ
-                drill_df = df_view[df_view['diagnosis_clean'] == selected_label]
-                st.markdown(f'<div class="drill-banner">🔍 กำลังดู: {selected_label} · {len(drill_df)} เคส</div>', unsafe_allow_html=True)
+            if selected_label:
+                if selected_label in DISEASE_COLORS:  # คลิกวงใน (disease_group)
+                    drill_df = df_view[df_view['disease_group'] == selected_label]
+                    st.markdown(f'<div class="drill-banner">🔍 กำลังดูกลุ่ม: {selected_label} · {drill_df["patient_id"].nunique() if "patient_id" in drill_df.columns else len(drill_df)} ราย</div>', unsafe_allow_html=True)
+                elif selected_label == 'อื่นๆ ในกลุ่มนี้':
+                    rest_labels = top_labels_by_group.get(selected_group, [])
+                    drill_df = df_view[(df_view['disease_group'] == selected_group) & (~df_view['diagnosis_clean'].isin(rest_labels))]
+                    st.markdown(f'<div class="drill-banner">🔍 กำลังดู: รหัสวินิจฉัยอื่นๆ ในกลุ่ม {selected_group} · {len(drill_df)} เคส</div>', unsafe_allow_html=True)
+                else:  # คลิกรหัสวินิจฉัยเฉพาะ
+                    drill_df = df_view[df_view['diagnosis_clean'] == selected_label]
+                    st.markdown(f'<div class="drill-banner">🔍 กำลังดู: {selected_label} · {len(drill_df)} เคส</div>', unsafe_allow_html=True)
 
-            show_cols = [c for c in ['patient_id', 'clinic_name', 'age_at_visit', 'gender', 'bmi', 'systolic'] if c in drill_df.columns]
-            st.dataframe(drill_df[show_cols].head(10), use_container_width=True, hide_index=True, height=180)
+                show_cols = [c for c in ['patient_id', 'clinic_name', 'age_at_visit', 'gender', 'bmi', 'systolic'] if c in drill_df.columns]
+                st.dataframe(drill_df[show_cols].head(10), use_container_width=True, hide_index=True, height=180)
+            else:
+                st.caption("👆 ยังไม่ได้เลือก — คลิกส่วนใดส่วนหนึ่งของผังด้านบนเพื่อดูรายละเอียด")
         else:
-            st.caption("👆 ยังไม่ได้เลือก — คลิกส่วนใดส่วนหนึ่งของผังด้านบนเพื่อดูรายละเอียด")
-    else:
-        st.caption("ไม่มีข้อมูลตามตัวกรองที่เลือก")
-    st.markdown('</div>', unsafe_allow_html=True)
+            st.caption("ไม่มีข้อมูลตามตัวกรองที่เลือก")
 
 with hero_r:
-    st.markdown('<div class="float-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">⚡ Command Action Panel</div>', unsafe_allow_html=True)
-    st.markdown('<div class="panel-sub">ปุ่มด้านล่างเป็นการทำงานจริงในหน้านี้ (บันทึกชั่วคราวระหว่างเซสชัน) — ยังไม่เชื่อมระบบ EMR/CRM จริง</div>', unsafe_allow_html=True)
+    with st.container(key="card_action"):
+        st.markdown('<div class="panel-title">⚡ Command Action Panel</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub">ปุ่มด้านล่างเป็นการทำงานจริงในหน้านี้ (บันทึกชั่วคราวระหว่างเซสชัน) — ยังไม่เชื่อมระบบ EMR/CRM จริง</div>', unsafe_allow_html=True)
 
-    if 'patient_id' in df_view.columns:
-        high_risk_full = df_view[df_view['critical_risk'] == 1][[
-            'patient_id', 'disease_group', 'bmi', 'systolic', 'diastolic'
-        ]].drop_duplicates('patient_id').sort_values(['systolic', 'bmi'], ascending=False)
-    else:
-        high_risk_full = pd.DataFrame()
-
-    ac1, ac2 = st.columns(2)
-    with ac1:
-        st.markdown('<div class="action-btn">', unsafe_allow_html=True)
-        gen_clicked = st.button("🔔 Generate Alert List", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with ac2:
-        st.markdown('<div class="action-btn-secondary">', unsafe_allow_html=True)
-        sched_clicked = st.button("📅 Schedule Outreach", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    if gen_clicked:
-        if not high_risk_full.empty:
-            st.success(f"✅ สร้างรายชื่อแจ้งเตือนแล้ว {len(high_risk_full)} ราย")
-            csv_data = high_risk_full.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📥 ดาวน์โหลด Alert List (CSV)", csv_data, "critical_risk_alert_list.csv",
-                                "text/csv", use_container_width=True)
+        if 'patient_id' in df_view.columns:
+            high_risk_full = df_view[df_view['critical_risk'] == 1][[
+                'patient_id', 'disease_group', 'bmi', 'systolic', 'diastolic'
+            ]].drop_duplicates('patient_id').sort_values(['systolic', 'bmi'], ascending=False)
         else:
-            st.info("ไม่มีผู้ป่วยกลุ่มเสี่ยงวิกฤตในตัวกรองปัจจุบัน")
+            high_risk_full = pd.DataFrame()
 
-    if 'outreach_queue' not in st.session_state:
-        st.session_state['outreach_queue'] = []
+        ac1, ac2 = st.columns(2)
+        with ac1:
+            st.markdown('<div class="action-btn">', unsafe_allow_html=True)
+            gen_clicked = st.button("🔔 Generate Alert List", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with ac2:
+            st.markdown('<div class="action-btn-secondary">', unsafe_allow_html=True)
+            sched_clicked = st.button("📅 Schedule Outreach", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    if sched_clicked:
-        st.session_state['show_outreach_form'] = True
+        if gen_clicked:
+            if not high_risk_full.empty:
+                st.success(f"✅ สร้างรายชื่อแจ้งเตือนแล้ว {len(high_risk_full)} ราย")
+                csv_data = high_risk_full.to_csv(index=False).encode('utf-8-sig')
+                st.download_button("📥 ดาวน์โหลด Alert List (CSV)", csv_data, "critical_risk_alert_list.csv",
+                                    "text/csv", use_container_width=True)
+            else:
+                st.info("ไม่มีผู้ป่วยกลุ่มเสี่ยงวิกฤตในตัวกรองปัจจุบัน")
 
-    if st.session_state.get('show_outreach_form'):
-        with st.form("outreach_form"):
-            pick_ids = st.multiselect("เลือกผู้ป่วย", high_risk_full['patient_id'].tolist() if not high_risk_full.empty else [],
-                                       default=high_risk_full['patient_id'].tolist()[:5] if not high_risk_full.empty else [])
-            outreach_date = st.date_input("วันที่นัดติดต่อ")
-            note = st.text_area("บันทึกเพิ่มเติม", placeholder="เช่น โทรนัด Fast-track ตรวจหัวใจ")
-            submitted = st.form_submit_button("ยืนยันกำหนดการ")
-            if submitted:
-                st.session_state['outreach_queue'].append({
-                    'วันที่นัด': str(outreach_date), 'จำนวนราย': len(pick_ids), 'บันทึก': note
-                })
-                st.session_state['show_outreach_form'] = False
-                st.success(f"✅ กำหนดการติดต่อ {len(pick_ids)} รายเรียบร้อย")
+        if 'outreach_queue' not in st.session_state:
+            st.session_state['outreach_queue'] = []
 
-    if st.session_state['outreach_queue']:
-        st.markdown('<div class="panel-title" style="margin-top:8px; font-size:0.8rem;">คิวที่กำหนดไว้ (session นี้)</div>', unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame(st.session_state['outreach_queue']), use_container_width=True, hide_index=True)
+        if sched_clicked:
+            st.session_state['show_outreach_form'] = True
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        if st.session_state.get('show_outreach_form'):
+            with st.form("outreach_form"):
+                pick_ids = st.multiselect("เลือกผู้ป่วย", high_risk_full['patient_id'].tolist() if not high_risk_full.empty else [],
+                                           default=high_risk_full['patient_id'].tolist()[:5] if not high_risk_full.empty else [])
+                outreach_date = st.date_input("วันที่นัดติดต่อ")
+                note = st.text_area("บันทึกเพิ่มเติม", placeholder="เช่น โทรนัด Fast-track ตรวจหัวใจ")
+                submitted = st.form_submit_button("ยืนยันกำหนดการ")
+                if submitted:
+                    st.session_state['outreach_queue'].append({
+                        'วันที่นัด': str(outreach_date), 'จำนวนราย': len(pick_ids), 'บันทึก': note
+                    })
+                    st.session_state['show_outreach_form'] = False
+                    st.success(f"✅ กำหนดการติดต่อ {len(pick_ids)} รายเรียบร้อย")
+
+        if st.session_state['outreach_queue']:
+            st.markdown('<div class="panel-title" style="margin-top:8px; font-size:0.8rem;">คิวที่กำหนดไว้ (session นี้)</div>', unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame(st.session_state['outreach_queue']), use_container_width=True, hide_index=True)
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="float-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">🩺 สัดส่วนระดับความดันโลหิต</div>', unsafe_allow_html=True)
-    bp_data = df_view['bp_level'].value_counts().reset_index()
-    bp_data.columns = ['Level', 'Count']
-    fig_pie = px.pie(bp_data, names='Level', values='Count', hole=0.55, color='Level', color_discrete_map=BP_COLORS)
-    fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', height=230, margin=dict(l=0, r=0, t=10, b=0),
-                           legend=dict(orientation="h", yanchor="bottom", y=-0.3, font=dict(size=9)))
-    st.plotly_chart(fig_pie, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(key="card_bp_pie"):
+        st.markdown('<div class="panel-title">🩺 สัดส่วนระดับความดันโลหิต</div>', unsafe_allow_html=True)
+        bp_data = df_view['bp_level'].value_counts().reset_index()
+        bp_data.columns = ['Level', 'Count']
+        fig_pie = px.pie(bp_data, names='Level', values='Count', hole=0.55, color='Level', color_discrete_map=BP_COLORS)
+        fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', height=230, margin=dict(l=0, r=0, t=10, b=0),
+                               legend=dict(orientation="h", yanchor="bottom", y=-0.3, font=dict(size=9)))
+        st.plotly_chart(fig_pie, use_container_width=True)
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
 # ============================================================
 # 9. รายชื่อกลุ่มเสี่ยงสูง — AgGrid conditional formatting (fallback: pandas Styler)
 # ============================================================
-st.markdown('<div class="float-card">', unsafe_allow_html=True)
-st.markdown('<div class="panel-title">🚨 รายชื่อผู้ป่วยกลุ่มเสี่ยงสูงต้องเฝ้าระวัง</div>', unsafe_allow_html=True)
-st.markdown('<div class="panel-sub">ไล่สีแดงตามความรุนแรงของ Systolic — ยิ่งเข้มยิ่งเร่งด่วน</div>', unsafe_allow_html=True)
+with st.container(key="card_risktable"):
+    st.markdown('<div class="panel-title">🚨 รายชื่อผู้ป่วยกลุ่มเสี่ยงสูงต้องเฝ้าระวัง</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel-sub">ไล่สีแดงตามความรุนแรงของ Systolic — ยิ่งเข้มยิ่งเร่งด่วน</div>', unsafe_allow_html=True)
 
-if not high_risk_full.empty:
-    disp = high_risk_full.copy()
-    disp.columns = ['ID', 'กลุ่มโรค', 'BMI', 'Sys', 'Dia']
+    if not high_risk_full.empty:
+        disp = high_risk_full.copy()
+        disp.columns = ['ID', 'กลุ่มโรค', 'BMI', 'Sys', 'Dia']
 
-    if AGGRID_AVAILABLE:
-        row_style_jscode = JsCode("""
-        function(params) {
-            if (params.data.Sys >= 180) { return {'backgroundColor': '#F3A9A5', 'color': '#5A0E0E'}; }
-            if (params.data.Sys >= 160) { return {'backgroundColor': '#F8C6C0'}; }
-            if (params.data.Sys >= 140) { return {'backgroundColor': '#FBE1DE'}; }
-            return {};
-        }
-        """)
-        gb = GridOptionsBuilder.from_dataframe(disp)
-        gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=8)
-        gb.configure_default_column(sortable=True, filter=True, resizable=True)
-        gb.configure_grid_options(getRowStyle=row_style_jscode)
-        grid_options = gb.build()
-        AgGrid(disp, gridOptions=grid_options, allow_unsafe_jscode=True,
-               fit_columns_on_grid_load=True, height=260, theme='alpine')
+        if AGGRID_AVAILABLE:
+            row_style_jscode = JsCode("""
+            function(params) {
+                if (params.data.Sys >= 180) { return {'backgroundColor': '#F3A9A5', 'color': '#5A0E0E'}; }
+                if (params.data.Sys >= 160) { return {'backgroundColor': '#F8C6C0'}; }
+                if (params.data.Sys >= 140) { return {'backgroundColor': '#FBE1DE'}; }
+                return {};
+            }
+            """)
+            gb = GridOptionsBuilder.from_dataframe(disp)
+            gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=8)
+            gb.configure_default_column(sortable=True, filter=True, resizable=True)
+            gb.configure_grid_options(getRowStyle=row_style_jscode)
+            grid_options = gb.build()
+            AgGrid(disp, gridOptions=grid_options, allow_unsafe_jscode=True,
+                   fit_columns_on_grid_load=True, height=260, theme='alpine')
+        else:
+            st.caption("ℹ️ ติดตั้ง `streamlit-aggrid` (เพิ่มใน requirements.txt) เพื่อได้ตารางแบบ sort/filter ได้เต็มรูปแบบ — ตอนนี้แสดงแบบไล่สีพื้นฐานแทน")
+            def highlight_severity(row):
+                if row['Sys'] >= 180:
+                    return ['background-color: #F3A9A5'] * len(row)
+                elif row['Sys'] >= 160:
+                    return ['background-color: #F8C6C0'] * len(row)
+                elif row['Sys'] >= 140:
+                    return ['background-color: #FBE1DE'] * len(row)
+                return [''] * len(row)
+            st.dataframe(disp.style.apply(highlight_severity, axis=1), use_container_width=True, hide_index=True, height=260)
+
+        csv_data = high_risk_full.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(f"📥 Export ทั้งหมด ({len(high_risk_full)} รายการ)", csv_data,
+                            "critical_risk_patients.csv", "text/csv", use_container_width=True)
     else:
-        st.caption("ℹ️ ติดตั้ง `streamlit-aggrid` (เพิ่มใน requirements.txt) เพื่อได้ตารางแบบ sort/filter ได้เต็มรูปแบบ — ตอนนี้แสดงแบบไล่สีพื้นฐานแทน")
-        def highlight_severity(row):
-            if row['Sys'] >= 180:
-                return ['background-color: #F3A9A5'] * len(row)
-            elif row['Sys'] >= 160:
-                return ['background-color: #F8C6C0'] * len(row)
-            elif row['Sys'] >= 140:
-                return ['background-color: #FBE1DE'] * len(row)
-            return [''] * len(row)
-        st.dataframe(disp.style.apply(highlight_severity, axis=1), use_container_width=True, hide_index=True, height=260)
-
-    csv_data = high_risk_full.to_csv(index=False).encode('utf-8-sig')
-    st.download_button(f"📥 Export ทั้งหมด ({len(high_risk_full)} รายการ)", csv_data,
-                        "critical_risk_patients.csv", "text/csv", use_container_width=True)
-else:
-    st.success("✅ ไม่พบคนไข้ในเกณฑ์ความเสี่ยงวิกฤต")
-st.markdown('</div>', unsafe_allow_html=True)
+        st.success("✅ ไม่พบคนไข้ในเกณฑ์ความเสี่ยงวิกฤต")
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
@@ -602,71 +599,68 @@ st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 p1, p2, p3 = st.columns([1, 1.1, 1.2])
 
 with p1:
-    st.markdown('<div class="float-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">👥 พีระมิดประชากรผู้ป่วย</div>', unsafe_allow_html=True)
-    st.markdown('<div class="panel-sub">อายุ x เพศ</div>', unsafe_allow_html=True)
-    order = ['0-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80+']
-    pyr = df_view.groupby(['pyramid_group', 'gender']).size().reset_index(name='count')
-    male = pyr[pyr['gender'] == 'ช'].set_index('pyramid_group')['count']
-    female = pyr[pyr['gender'] == 'ญ'].set_index('pyramid_group')['count']
-    male_vals = [int(male.get(l, 0)) for l in order]
-    female_vals = [int(female.get(l, 0)) for l in order]
+    with st.container(key="card_pyramid"):
+        st.markdown('<div class="panel-title">👥 พีระมิดประชากรผู้ป่วย</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub">อายุ x เพศ</div>', unsafe_allow_html=True)
+        order = ['0-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80+']
+        pyr = df_view.groupby(['pyramid_group', 'gender']).size().reset_index(name='count')
+        male = pyr[pyr['gender'] == 'ช'].set_index('pyramid_group')['count']
+        female = pyr[pyr['gender'] == 'ญ'].set_index('pyramid_group')['count']
+        male_vals = [int(male.get(l, 0)) for l in order]
+        female_vals = [int(female.get(l, 0)) for l in order]
 
-    fig_pyr = go.Figure()
-    fig_pyr.add_trace(go.Bar(y=order, x=[-v for v in male_vals], name='ชาย', orientation='h',
-                              marker_color=TEAL, customdata=male_vals, hovertemplate='ชาย %{y}: %{customdata} คน<extra></extra>'))
-    fig_pyr.add_trace(go.Bar(y=order, x=female_vals, name='หญิง', orientation='h',
-                              marker_color="#D97AA0", customdata=female_vals, hovertemplate='หญิง %{y}: %{customdata} คน<extra></extra>'))
-    max_v = max(male_vals + female_vals) if (male_vals + female_vals) else 1
-    fig_pyr.update_layout(
-        barmode='overlay', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        height=310, margin=dict(l=0, r=0, t=10, b=0),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=9)),
-        xaxis=dict(tickvals=[-max_v, -max_v/2, 0, max_v/2, max_v],
-                   ticktext=[str(int(max_v)), str(int(max_v/2)), "0", str(int(max_v/2)), str(int(max_v))],
-                   title=None, gridcolor='#F1F5F9')
-    )
-    st.plotly_chart(fig_pyr, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        fig_pyr = go.Figure()
+        fig_pyr.add_trace(go.Bar(y=order, x=[-v for v in male_vals], name='ชาย', orientation='h',
+                                  marker_color=TEAL, customdata=male_vals, hovertemplate='ชาย %{y}: %{customdata} คน<extra></extra>'))
+        fig_pyr.add_trace(go.Bar(y=order, x=female_vals, name='หญิง', orientation='h',
+                                  marker_color="#D97AA0", customdata=female_vals, hovertemplate='หญิง %{y}: %{customdata} คน<extra></extra>'))
+        max_v = max(male_vals + female_vals) if (male_vals + female_vals) else 1
+        fig_pyr.update_layout(
+            barmode='overlay', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            height=310, margin=dict(l=0, r=0, t=10, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=9)),
+            xaxis=dict(tickvals=[-max_v, -max_v/2, 0, max_v/2, max_v],
+                       ticktext=[str(int(max_v)), str(int(max_v/2)), "0", str(int(max_v/2)), str(int(max_v))],
+                       title=None, gridcolor='#F1F5F9')
+        )
+        st.plotly_chart(fig_pyr, use_container_width=True)
 
 with p2:
-    st.markdown('<div class="float-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">🏢 คลินิกที่มีผู้ป่วยมากที่สุด</div>', unsafe_allow_html=True)
-    st.markdown('<div class="panel-sub">Top 10 จาก 69 คลินิก</div>', unsafe_allow_html=True)
-    clinic_counts = df_view['clinic_name'].value_counts().head(10).reset_index()
-    clinic_counts.columns = ['คลินิก', 'จำนวนเคส']
-    clinic_counts['label'] = clinic_counts['คลินิก'].apply(lambda x: x if len(x) <= 26 else x[:24] + '…')
-    fig_clinic = px.bar(clinic_counts.sort_values('จำนวนเคส'), x='จำนวนเคส', y='label', orientation='h',
-                         color='จำนวนเคส', color_continuous_scale=[[0, '#CFE3DF'], [1, TEAL]])
-    fig_clinic.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                              height=310, margin=dict(l=0, r=0, t=10, b=0), coloraxis_showscale=False)
-    fig_clinic.update_yaxes(title=None)
-    st.plotly_chart(fig_clinic, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(key="card_clinic"):
+        st.markdown('<div class="panel-title">🏢 คลินิกที่มีผู้ป่วยมากที่สุด</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub">Top 10 จาก 69 คลินิก</div>', unsafe_allow_html=True)
+        clinic_counts = df_view['clinic_name'].value_counts().head(10).reset_index()
+        clinic_counts.columns = ['คลินิก', 'จำนวนเคส']
+        clinic_counts['label'] = clinic_counts['คลินิก'].apply(lambda x: x if len(x) <= 26 else x[:24] + '…')
+        fig_clinic = px.bar(clinic_counts.sort_values('จำนวนเคส'), x='จำนวนเคส', y='label', orientation='h',
+                             color='จำนวนเคส', color_continuous_scale=[[0, '#CFE3DF'], [1, TEAL]])
+        fig_clinic.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                  height=310, margin=dict(l=0, r=0, t=10, b=0), coloraxis_showscale=False)
+        fig_clinic.update_yaxes(title=None)
+        st.plotly_chart(fig_clinic, use_container_width=True)
 
 with p3:
-    st.markdown('<div class="float-card">', unsafe_allow_html=True)
-    st.markdown('<div class="panel-title">⚖️ BMI กับความดันโลหิต (รายเคส)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="panel-sub">เฉพาะผู้ใหญ่ที่มีค่าความดันจริง — เส้นประ = เกณฑ์เสี่ยง</div>', unsafe_allow_html=True)
-    scatter_df = df_view[df_view['is_adult'] & df_view['systolic'].notna() & ~df_view['bmi_imputed']].copy()
-    if 'patient_id' in scatter_df.columns:
-        scatter_df['visit_freq'] = scatter_df.groupby('patient_id')['patient_id'].transform('count')
-    else:
-        scatter_df['visit_freq'] = 1
-    if not scatter_df.empty:
-        fig_scatter = px.scatter(scatter_df, x='bmi', y='systolic', color='disease_group', size='visit_freq',
-                                  color_discrete_map=DISEASE_COLORS)
-        fig_scatter.add_hline(y=140, line_dash="dot", line_color=RED, opacity=0.5)
-        fig_scatter.add_vline(x=25, line_dash="dot", line_color=RED, opacity=0.5)
-        fig_scatter.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                   height=310, margin=dict(l=0, r=0, t=10, b=0),
-                                   legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=8)))
-        fig_scatter.update_xaxes(title="BMI", gridcolor='#F1F5F9')
-        fig_scatter.update_yaxes(title="Systolic (mmHg)", gridcolor='#F1F5F9')
-        st.plotly_chart(fig_scatter, use_container_width=True)
-    else:
-        st.caption("ไม่มีข้อมูลเพียงพอตามตัวกรองที่เลือก")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(key="card_scatter"):
+        st.markdown('<div class="panel-title">⚖️ BMI กับความดันโลหิต (รายเคส)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub">เฉพาะผู้ใหญ่ที่มีค่าความดันจริง — เส้นประ = เกณฑ์เสี่ยง</div>', unsafe_allow_html=True)
+        scatter_df = df_view[df_view['is_adult'] & df_view['systolic'].notna() & ~df_view['bmi_imputed']].copy()
+        if 'patient_id' in scatter_df.columns:
+            scatter_df['visit_freq'] = scatter_df.groupby('patient_id')['patient_id'].transform('count')
+        else:
+            scatter_df['visit_freq'] = 1
+        if not scatter_df.empty:
+            fig_scatter = px.scatter(scatter_df, x='bmi', y='systolic', color='disease_group', size='visit_freq',
+                                      color_discrete_map=DISEASE_COLORS)
+            fig_scatter.add_hline(y=140, line_dash="dot", line_color=RED, opacity=0.5)
+            fig_scatter.add_vline(x=25, line_dash="dot", line_color=RED, opacity=0.5)
+            fig_scatter.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                       height=310, margin=dict(l=0, r=0, t=10, b=0),
+                                       legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=8)))
+            fig_scatter.update_xaxes(title="BMI", gridcolor='#F1F5F9')
+            fig_scatter.update_yaxes(title="Systolic (mmHg)", gridcolor='#F1F5F9')
+            st.plotly_chart(fig_scatter, use_container_width=True)
+        else:
+            st.caption("ไม่มีข้อมูลเพียงพอตามตัวกรองที่เลือก")
 
 st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
