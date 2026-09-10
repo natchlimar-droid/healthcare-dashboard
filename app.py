@@ -284,8 +284,14 @@ with st.sidebar:
     if has_date:
         valid_dates = df["visit_date"].dropna()
         if not valid_dates.empty:
+            import datetime
             d_min, d_max = valid_dates.min().date(), valid_dates.max().date()
-            date_filter = st.date_input("ช่วงวันที่", (d_min, d_max), min_value=d_min, max_value=d_max)
+            
+            # ขยายกรอบเวลาให้ครอบคลุม 1/5/2026 - 30/6/2026
+            cal_min = min(d_min, datetime.date(2026, 5, 1))
+            cal_max = max(d_max, datetime.date(2026, 6, 30))
+            
+            date_filter = st.date_input("ช่วงวันที่", (d_min, d_max), min_value=cal_min, max_value=cal_max)
         else:
             date_filter = None
     else:
