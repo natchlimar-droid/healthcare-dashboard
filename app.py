@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import time
 
 # optional dependencies
 try:
@@ -652,8 +653,51 @@ st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
 
 # ============================================================
-# Section 6 — Monthly Trends + Lead Scoring
+# Section 6 — Monthly Trends + Lead Scoring / Smart Recommender
 # ============================================================
+def analyze_patient_risk(row):
+    """
+    คำนวณ Health Score (0-100%) จากข้อมูลความดัน (BP), น้ำหนัก (BMI) และความถี่ในการพบแพทย์
+    """
+    score = 100
+    reasons = []
+    
+    sys_val = row.get("systolic", 0)
+    bmi_val = row.get("bmi", 22)
+    visits_val = row.get("visits", 1)
+    
+    # หักคะแนนความดัน
+    if sys_val >= 160:
+        score -= 40
+        reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 ความดันวิกฤต ({sys_val:.0f})</span>")
+    elif sys_val >= 140:
+        score -= 25
+        reasons.append(f"<span style='background:#F8C6C0; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 ความดันสูง ({sys_val:.0f})</span>")
+    elif sys_val >= 130:
+        score -= 10
+        reasons.append(f"<span style='background:#FEF0C7; color:#B54708; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 เฝ้าระวังความดัน ({sys_val:.0f})</span>")
+        
+    # หักคะแนน BMI
+    if bmi_val >= 30:
+        score -= 20
+        reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>📈 โรคอ้วน ({bmi_val:.1f})</span>")
+    elif bmi_val >= 25:
+        score -= 10
+        reasons.append(f"<span style='background:#FEF0C7; color:#B54708; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>📈 น้ำหนักเกิน ({bmi_val:.1f})</span>")
+        
+    # หักคะแนนความถี่ (บ่งบอกถึงปัญหาสุขภาพเรื้อรัง)
+    if visits_val >= 5:
+        score -= 15
+        reasons.append(f"<span style='background:#E0F2FE; color:#0369A1; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มารพ. บ่อยผิดปกติ ({visits_val:.0f} ครั้ง)</span>")
+    elif visits_val >= 3:
+        score -= 5
+        reasons.append(f"<span style='background:#F1F5F9; color:#475569; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มีประวัติมาซ้ำ ({visits_val:.0f} ครั้ง)</span>")
+        
+    if not reasons:
+        reasons.append(f"<span style='background:#ECFDF5; color:#065F46; padding:4px 8px; border-radius:12px; font-size:0.7rem; display:inline-block; margin-bottom:4px;'>✅ สุขภาพอยู่ในเกณฑ์ปกติ</span>")
+        
+    return max(0, score), "".join(reasons)
+
 t1,t2 = st.columns([1.5,1])
 
 with t1:
@@ -696,76 +740,97 @@ with t1:
 with t2:
     with st.container(key="card_lead"):
         st.markdown('<div class="panel-title">🎯 Smart Package Recommender</div>', unsafe_allow_html=True)
-        if clf is not None and summary_pts is not None and "patient_id" in dv.columns:
-            avail = [p for p in summary_pts.index if p in dv["patient_id"].values]
-            if avail:
-                sel_pid = st.selectbox("เลือก Patient ID", avail[:40], label_visibility="collapsed")
+        if summary_pts is not None and "patient_id" in dv.columns:
+            avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
+            if not avail_df.empty:
                 
-                # ดึงข้อมูลผู้ป่วย
-                pt_data = summary_pts.loc[sel_pid]
-                score = int(pt_data["lead_score"])
-                gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
-                sys_val = pt_data["systolic"]
-                bmi_val = pt_data["bmi"]
-                visits_val = pt_data["visits"]
+                # 1. Data Scalability: ค้นหาและเลือกผู้ป่วยผ่าน DataFrame
+                st.markdown('<div style="font-size:0.75rem; color:#5B6B6B; margin-bottom:4px;">🔍 ค้นหาและคลิกเลือกผู้ป่วย (Search & Select)</div>', unsafe_allow_html=True)
                 
-                # Explainable AI: สร้าง Badges ตามเงื่อนไขสุขภาพ
-                reasons = []
-                if sys_val >= 140:
-                    reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 ความดันสูง ({sys_val:.0f})</span>")
-                elif sys_val >= 130:
-                    reasons.append(f"<span style='background:#FEF0C7; color:#B54708; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 เฝ้าระวังความดัน ({sys_val:.0f})</span>")
+                import json
                 
-                if bmi_val >= 25:
-                    reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>📈 BMI เกินเกณฑ์ ({bmi_val:.1f})</span>")
+                selection = st.dataframe(
+                    avail_df[["patient_id", "visits", "bmi", "systolic"]].rename(
+                        columns={"patient_id": "Patient ID", "visits": "Visits", "bmi": "BMI", "systolic": "Systolic"}
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=180,
+                    on_select="rerun",
+                    selection_mode="single-row"
+                )
                 
-                if visits_val >= 3:
-                    reasons.append(f"<span style='background:#E0F2FE; color:#0369A1; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มา รพ. บ่อย ({visits_val:.0f} ครั้ง)</span>")
+                sel_idx = selection.selection.rows
                 
-                if not reasons:
-                    reasons.append(f"<span style='background:#ECFDF5; color:#065F46; padding:4px 8px; border-radius:12px; font-size:0.7rem; display:inline-block; margin-bottom:4px;'>✅ สุขภาพอยู่ในเกณฑ์ปกติ</span>")
-                
-                reasons_html = "".join(reasons)
-                
-                c_tx  = "#065F46" if score>=60 else MUTED
-                badge = "🔥 High Priority" if score>=60 else "🌱 General"
-                
-                # Patient Profile Card
-                st.markdown(f"""
-                <div style="background:{SURFACE}; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-top:8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
-                  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div style="font-size:2.2rem; background:#F1F5F9; border-radius:50%; width:48px; height:48px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
-                        <div>
-                            <div style="font-weight:700; color:{INK}; font-size:1.05rem;">{sel_pid}</div>
-                            <div style="font-size:0.75rem; color:{MUTED};">{badge}</div>
+                if sel_idx:
+                    sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
+                    pt_data = summary_pts.loc[sel_pid]
+                    
+                    # 2. Clinical Scoring & Recommendation
+                    score, reasons_html = analyze_patient_risk(pt_data)
+                    
+                    gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
+                    
+                    # จัดระดับความเสี่ยง
+                    if score <= 60:
+                        c_tx, badge = "#B3261E", "🚨 High Risk"
+                    elif score <= 80:
+                        c_tx, badge = "#B54708", "⚠️ Medium Risk"
+                    else:
+                        c_tx, badge = "#065F46", "🌱 Low Risk"
+                        
+                    # Patient Profile Card
+                    st.markdown(f"""
+                    <div style="background:{SURFACE}; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-top:12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+                      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="font-size:2.2rem; background:#F1F5F9; border-radius:50%; width:48px; height:48px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
+                            <div>
+                                <div style="font-weight:700; color:{INK}; font-size:1.05rem;">{sel_pid}</div>
+                                <div style="font-size:0.75rem; font-weight:600; color:{c_tx};">{badge}</div>
+                            </div>
                         </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:0.7rem; color:{MUTED}; font-weight:600;">Health Score</div>
+                            <div style="font-size:1.4rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.2;">{score}%</div>
+                        </div>
+                      </div>
+                      
+                      <div style="font-size:0.75rem; font-weight:600; color:{INK}; margin-bottom:6px;">💡 AI Analysis Insights:</div>
+                      <div style="margin-bottom:10px;">
+                        {reasons_html}
+                      </div>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:0.7rem; color:{MUTED}; font-weight:600;">Health Score</div>
-                        <div style="font-size:1.4rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.2;">{score}%</div>
-                    </div>
-                  </div>
-                  
-                  <div style="font-size:0.75rem; font-weight:600; color:{INK}; margin-bottom:6px;">💡 AI Analysis Insights:</div>
-                  <div style="margin-bottom:10px;">
-                    {reasons_html}
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Professional Action Button
-                st.markdown('<div class="action-btn" style="margin-top:12px;">', unsafe_allow_html=True)
-                if st.button("✨ Generate Personalized Proposal", use_container_width=True):
-                    st.success(f"สร้าง Proposal แจ้งเตือนสุขภาพสำหรับ {sel_pid} สำเร็จ!")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # Conversion Estimation / Opportunity Potential
+                    """, unsafe_allow_html=True)
+                    
+                    # 3. Actionable API Integration
+                    st.markdown('<div class="action-btn" style="margin-top:12px;">', unsafe_allow_html=True)
+                    if st.button("✨ Generate Personalized Proposal", use_container_width=True):
+                        with st.spinner("กำลังเชื่อมต่อระบบ API และสร้าง Proposal..."):
+                            time.sleep(1) # จำลองเวลาประมวลผล
+                            try:
+                                import requests
+                                # Mockup Webhook / API Call
+                                payload = {
+                                    "patient_id": sel_pid,
+                                    "health_score": score,
+                                    "risk_level": badge,
+                                    "recommended_action": "Comprehensive Health Screening" if score <= 60 else "Basic Checkup"
+                                }
+                                # res = requests.post("https://api.hospital.com/webhook/proposal", json=payload, timeout=3)
+                                st.success(f"✅ ส่งข้อมูล {sel_pid} ไปยัง Webhook สำเร็จ! (API Mockup)")
+                            except Exception as e:
+                                st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ API: {e}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    st.info("👆 คลิกเลือกผู้ป่วยในตารางเพื่อดู Profile และสร้าง Proposal")
+                    
+                # Conversion Estimation / Opportunity Potential (คำนวณจาก High Risk ในข้อมูล)
                 st.markdown(f"""
                 <div style="background:#F8FAFC; border-radius:8px; padding:12px; margin-top:16px; border:1px solid #E2E8F0;">
-                  <div style="font-size:0.75rem; color:{MUTED}; font-weight:600; margin-bottom:4px;">🎯 Opportunity Potential (กลุ่มเป้าหมาย)</div>
+                  <div style="font-size:0.75rem; color:{MUTED}; font-weight:600; margin-bottom:4px;">🎯 Opportunity Potential (กลุ่ม High Risk)</div>
                   <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                      <span style="font-size:0.85rem; color:{INK};">จำนวน <b>{high_lead_count:,} ราย</b></span>
+                      <span style="font-size:0.85rem; color:{INK};">เป้าหมาย: <b>{high_lead_count:,} ราย</b></span>
                       <span style="font-size:1.15rem; font-weight:700; color:{TEAL}; font-family:'IBM Plex Mono',monospace;">฿ {est_pipeline:,.0f}</span>
                   </div>
                   <div style="font-size:0.65rem; color:{MUTED}; margin-top:2px; text-align:right;">(คำนวณจากแพ็กเกจพื้นฐาน 3,000 ฿/ราย)</div>
@@ -773,7 +838,7 @@ with t2:
                 """, unsafe_allow_html=True)
                 
         else:
-            st.caption("ติดตั้ง scikit-learn เพื่อเปิดใช้ Smart Recommender" if not SKLEARN_AVAILABLE else "ไม่มีข้อมูล patient_id")
+            st.caption("ไม่มีข้อมูล patient_id")
 
     st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
