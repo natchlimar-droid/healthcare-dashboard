@@ -22,6 +22,9 @@ try:
 except ImportError:
     AGGRID_AVAILABLE = False
 
+# ตั้งเป็น True เฉพาะตอนต้องการ interactive grid จริงๆ (AgGrid โหลด JS bundle ใหม่ทุก rerun ทำให้หน่วง)
+USE_AGGRID = False
+
 # ============================================================
 # Design tokens
 # ============================================================
@@ -52,7 +55,7 @@ SUNBURST_TOP_N = 5
 
 HEALTH_PACKAGES = {
     "Essential Package": {
-        "price": 3000, 
+        "price": 3000,
         "tests": ["CBC (ความสมบูรณ์ของเม็ดเลือด)", "FBS (น้ำตาลในเลือด)", "Lipid Profile (ไขมันในเลือด)", "Uric Acid (กรดยูริก)", "CXR (เอกซเรย์ปอด)", "EKG (คลื่นไฟฟ้าหัวใจ)"],
         "desc": "เหมาะสำหรับวัยเริ่มต้นทำงานและผู้ที่ไม่มีความเสี่ยงหรือโรคประจำตัว (อายุ <30 ปี)"
     },
@@ -75,25 +78,25 @@ DISEASE_CONFIG = {
         "is_general": True
     },
     "ล้างไต (Dialysis)": {
-        "icon": "🩺", 
+        "icon": "🩺",
         "filter_condition": lambda df: df["is_dialysis"] == True,
         "target_desc": "BP <130/80",
         "Key_Tests": ["BUN", "Creatinine", "Electrolytes", "CBC"]
     },
     "เบาหวาน (Diabetes)": {
-        "icon": "🩸", 
+        "icon": "🩸",
         "filter_condition": lambda df: df["disease_group"] == "เบาหวาน",
         "target_desc": "HbA1c <7.0",
         "Key_Tests": ["HbA1c", "Microalbuminuria", "Funduscopy"]
     },
     "ความดันโลหิตสูง (Hypertension)": {
-        "icon": "🫀", 
+        "icon": "🫀",
         "filter_condition": lambda df: df["disease_group"] == "ความดันโลหิตสูง",
         "target_desc": "BP <140/90",
         "Key_Tests": ["Lipid Profile", "Creatinine", "EKG"]
     },
     "ไขมันในเลือดสูง (Dyslipidemia)": {
-        "icon": "🧈", 
+        "icon": "🧈",
         "filter_condition": lambda df: df["disease_group"] == "ไขมันในเลือดสูง",
         "target_desc": "LDL <100",
         "Key_Tests": ["Lipid Profile", "Liver Function"]
@@ -180,79 +183,45 @@ def read_csv_or_zip(file_path, preferred_csv_names=None):
     preferred_csv_names:
     รายชื่อไฟล์ CSV ที่อยากเลือกก่อน หาก ZIP มีหลาย CSV
     """
-
-    # -----------------------------
-    # กรณีเป็น CSV ปกติ
-    # -----------------------------
     if file_path.lower().endswith(".csv"):
-        return pd.read_csv(
-            file_path,
-            encoding="utf-8-sig",
-            low_memory=False
-        )
+        return pd.read_csv(file_path, encoding="utf-8-sig", low_memory=False)
 
-    # -----------------------------
-    # กรณีเป็น ZIP
-    # -----------------------------
     if file_path.lower().endswith(".zip"):
         with zipfile.ZipFile(file_path, "r") as z:
             csv_files = [
                 name for name in z.namelist()
-                if name.lower().endswith(".csv")
-                and not name.startswith("__MACOSX/")
+                if name.lower().endswith(".csv") and not name.startswith("__MACOSX/")
             ]
-
             if not csv_files:
-                raise ValueError(
-                    f"ไม่พบไฟล์ CSV ภายใน ZIP: {file_path}"
-                )
+                raise ValueError(f"ไม่พบไฟล์ CSV ภายใน ZIP: {file_path}")
 
-            # เลือกไฟล์ตามชื่อที่ต้องการก่อน
             selected_file = None
-
             if preferred_csv_names:
-                preferred_lower = {
-                    name.lower() for name in preferred_csv_names
-                }
-
+                preferred_lower = {name.lower() for name in preferred_csv_names}
                 for csv_name in csv_files:
                     base_name = os.path.basename(csv_name).lower()
-
                     if base_name in preferred_lower:
                         selected_file = csv_name
                         break
 
-            # ถ้าไม่เจอชื่อที่ต้องการ ใช้ CSV ตัวแรกใน ZIP
             if selected_file is None:
                 selected_file = csv_files[0]
 
             with z.open(selected_file) as csv_file:
-                return pd.read_csv(
-                    csv_file,
-                    encoding="utf-8-sig",
-                    low_memory=False
-                )
+                return pd.read_csv(csv_file, encoding="utf-8-sig", low_memory=False)
 
     raise ValueError(f"ไม่รองรับประเภทไฟล์: {file_path}")
 
 
 def find_data_file(file_candidates):
-    """
-    หาไฟล์ตัวแรกที่มีอยู่จริงจากรายชื่อที่กำหนด
-    """
     for file_name in file_candidates:
         if os.path.exists(file_name):
             return file_name
-
     return None
 
 
-@st.cache_data
+@st.cache_data(show_spinner="กำลังโหลดข้อมูล...")
 def load_data():
-    # --------------------------------------------------------
-    # 1) ไฟล์ข้อมูลหลัก
-    # รองรับทั้ง visits_cleaned และ visits_with_monthly_count
-    # --------------------------------------------------------
     main_file = find_data_file([
         "visits_cleaned.csv",
         "visits_cleaned.zip",
@@ -266,34 +235,19 @@ def load_data():
     try:
         df = read_csv_or_zip(
             main_file,
-            preferred_csv_names=[
-                "visits_cleaned.csv",
-                "visits_with_monthly_count.csv"
-            ]
+            preferred_csv_names=["visits_cleaned.csv", "visits_with_monthly_count.csv"]
         )
     except Exception as e:
         st.error(f"⚠️ อ่านไฟล์ข้อมูลหลักไม่สำเร็จ: {e}")
         return None, None, False, False
 
-    # ทำความสะอาดชื่อคอลัมน์
     df.columns = df.columns.astype(str).str.strip()
 
-    # --------------------------------------------------------
-    # 2) วันที่
-    # --------------------------------------------------------
+    # --- วันที่ ---
     has_date = False
-
     if "visit_date" in df.columns:
-        df["visit_date"] = pd.to_datetime(
-            df["visit_date"],
-            errors="coerce"
-        )
-
-        valid_date = (
-            df["visit_date"].notna()
-            & (df["visit_date"].dt.year >= 2000)
-        )
-
+        df["visit_date"] = pd.to_datetime(df["visit_date"], errors="coerce")
+        valid_date = df["visit_date"].notna() & (df["visit_date"].dt.year >= 2000)
         has_date = bool(valid_date.any())
         df.loc[~valid_date, "visit_date"] = pd.NaT
     else:
@@ -306,206 +260,102 @@ def load_data():
         df["year_month"] = "ไม่ระบุ"
         df["visit_day"] = pd.NaT
 
-    # --------------------------------------------------------
-    # 3) แปลงข้อมูลตัวเลข
-    # --------------------------------------------------------
-    for col in [
-        "age_at_visit",
-        "height_cm",
-        "weight_kg",
-        "bmi",
-        "systolic_bp",
-        "diastolic_bp"
-    ]:
+    # --- แปลงตัวเลข ---
+    for col in ["age_at_visit", "height_cm", "weight_kg", "bmi", "systolic_bp", "diastolic_bp"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # --------------------------------------------------------
-    # 4) ความดันโลหิต
-    # --------------------------------------------------------
+    # --- ความดันโลหิต ---
     if "systolic_bp" not in df.columns:
         df["systolic_bp"] = np.nan
-
     if "diastolic_bp" not in df.columns:
         df["diastolic_bp"] = np.nan
 
-    # อ่าน bp_raw หากไม่มี systolic_bp ที่ใช้ได้
     if "bp_raw" in df.columns and df["systolic_bp"].isna().all():
-        bp_clean = (
-            df["bp_raw"]
-            .astype(str)
-            .str.replace(",", "", regex=False)
-        )
-
-        bp_split = bp_clean.str.extract(
-            r"^\s*(\d{1,4}(?:\.\d+)?)\s*/\s*(\d{1,4}(?:\.\d+)?)\s*$"
-        )
-
+        bp_clean = df["bp_raw"].astype(str).str.replace(",", "", regex=False)
+        bp_split = bp_clean.str.extract(r"^\s*(\d{1,4}(?:\.\d+)?)\s*/\s*(\d{1,4}(?:\.\d+)?)\s*$")
         sys_bp = pd.to_numeric(bp_split[0], errors="coerce")
         dia_bp = pd.to_numeric(bp_split[1], errors="coerce")
-
         sys_bp[~sys_bp.between(60, 250)] = np.nan
         dia_bp[~dia_bp.between(30, 150)] = np.nan
-
         df["systolic_bp"] = sys_bp
         df["diastolic_bp"] = dia_bp
 
-    df.rename(
-        columns={
-            "systolic_bp": "systolic",
-            "diastolic_bp": "diastolic"
-        },
-        inplace=True
-    )
+    df.rename(columns={"systolic_bp": "systolic", "diastolic_bp": "diastolic"}, inplace=True)
 
-    # --------------------------------------------------------
-    # 5) เพศ
-    # --------------------------------------------------------
+    # --- เพศ ---
     if "gender" not in df.columns:
         df["gender"] = "ไม่ระบุ"
     else:
         df["gender"] = df["gender"].fillna("ไม่ระบุ")
+    df["gender_code"] = df["gender"].map({"ช": 0, "ญ": 1}).fillna(0.5)
 
-    df["gender_code"] = (
-        df["gender"]
-        .map({"ช": 0, "ญ": 1})
-        .fillna(0.5)
-    )
-
-    # --------------------------------------------------------
-    # 6) BMI
-    # --------------------------------------------------------
+    # --- BMI ---
     if "bmi" not in df.columns:
         df["bmi"] = 22.0
         df["bmi_imputed"] = True
     else:
         df["bmi_imputed"] = df["bmi"].isna()
-
         median_bmi = df["bmi"].median()
-        df["bmi"] = df["bmi"].fillna(
-            median_bmi if pd.notna(median_bmi) else 22.0
-        )
+        df["bmi"] = df["bmi"].fillna(median_bmi if pd.notna(median_bmi) else 22.0)
 
-    # --------------------------------------------------------
-    # 7) อายุ
-    # --------------------------------------------------------
-    has_age = (
-        "age_at_visit" in df.columns
-        and df["age_at_visit"].notna().any()
-    )
+    # --- อายุ ---
+    has_age = "age_at_visit" in df.columns and df["age_at_visit"].notna().any()
 
     if has_age:
         median_age = df["age_at_visit"].median()
-
-        df["age_at_visit"] = df["age_at_visit"].fillna(
-            median_age if pd.notna(median_age) else 35.0
-        )
-
+        df["age_at_visit"] = df["age_at_visit"].fillna(median_age if pd.notna(median_age) else 35.0)
         df["is_adult"] = df["age_at_visit"] >= 18
 
         df["age_group"] = pd.cut(
-            df["age_at_visit"],
-            bins=[0, 29, 39, 49, 59, 120],
-            labels=[
-                "<30 ปี",
-                "30-40 ปี",
-                "40-50 ปี",
-                "50-60 ปี",
-                ">60 ปี"
-            ]
+            df["age_at_visit"], bins=[0, 29, 39, 49, 59, 120],
+            labels=["<30 ปี", "30-40 ปี", "40-50 ปี", "50-60 ปี", ">60 ปี"]
         ).astype(str).replace("nan", "ไม่ระบุ")
 
         df["pyramid_group"] = pd.cut(
-            df["age_at_visit"],
-            bins=[0, 10, 20, 30, 40, 50, 60, 70, 80, 120],
-            right=False,
-            labels=[
-                "0-9",
-                "10-19",
-                "20-29",
-                "30-39",
-                "40-49",
-                "50-59",
-                "60-69",
-                "70-79",
-                "80+"
-            ]
+            df["age_at_visit"], bins=[0, 10, 20, 30, 40, 50, 60, 70, 80, 120], right=False,
+            labels=["0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80+"]
         ).astype(str)
-
     else:
         df["age_at_visit"] = 35.0
         df["is_adult"] = True
         df["age_group"] = "ไม่ระบุ"
         df["pyramid_group"] = "ไม่ระบุ"
 
-    # --------------------------------------------------------
-    # 8) ระดับความดัน / กลุ่มเสี่ยง
-    # --------------------------------------------------------
+    # --- ระดับความดัน / กลุ่มเสี่ยง ---
     bp_cat = pd.cut(
-        df["systolic"],
-        bins=[-1, 120, 139, 300],
-        labels=[
-            "ปกติ (<120)",
-            "เฝ้าระวัง (120-139)",
-            "สูง (≥140)"
-        ]
+        df["systolic"], bins=[-1, 120, 139, 300],
+        labels=["ปกติ (<120)", "เฝ้าระวัง (120-139)", "สูง (≥140)"]
     ).astype(object)
-
     bp_cat[df["systolic"].isna()] = "ไม่มีข้อมูล"
     df["bp_level"] = bp_cat
 
-    df["critical_risk"] = (
-        df["is_adult"]
-        & (df["bmi"] >= 25)
-        & (df["systolic"] >= 140)
-    ).astype(int)
+    df["critical_risk"] = (df["is_adult"] & (df["bmi"] >= 25) & (df["systolic"] >= 140)).astype(int)
 
-    # --------------------------------------------------------
-    # 9) Diagnosis / clinic / disease
-    # --------------------------------------------------------
-    def clean_diagnosis(value):
-        if pd.isna(value):
-            return "ไม่ระบุ"
-
-        value = str(value).strip()
-        return "ไม่ระบุ" if value in ("", "-", ":") else value
-
+    # --- Diagnosis / clinic / disease (vectorized) ---
     if "diagnosis_text" not in df.columns:
         df["diagnosis_text"] = ""
         df["diagnosis_clean"] = "ไม่ระบุ"
     else:
-        df["diagnosis_clean"] = df["diagnosis_text"].apply(clean_diagnosis)
+        cleaned = df["diagnosis_text"].astype(str).str.strip()
+        cleaned = cleaned.where(df["diagnosis_text"].notna(), "ไม่ระบุ")
+        cleaned = cleaned.replace({"": "ไม่ระบุ", "-": "ไม่ระบุ", ":": "ไม่ระบุ"})
+        df["diagnosis_clean"] = cleaned
 
     if "disease_group" not in df.columns:
         df["disease_group"] = "ทั่วไป"
-
     if "clinic_name" not in df.columns:
         df["clinic_name"] = "ไม่ระบุ"
 
-    # --------------------------------------------------------
-    # 10) Monthly summary — ไม่บังคับ
-    # --------------------------------------------------------
+    # --- Monthly summary — ไม่บังคับ ---
     monthly = None
-
-    monthly_file = find_data_file([
-        "monthly_visit_summary.csv",
-        "monthly_visit_summary.zip"
-    ])
-
+    monthly_file = find_data_file(["monthly_visit_summary.csv", "monthly_visit_summary.zip"])
     if monthly_file:
         try:
-            monthly = read_csv_or_zip(
-                monthly_file,
-                preferred_csv_names=["monthly_visit_summary.csv"]
-            )
-
+            monthly = read_csv_or_zip(monthly_file, preferred_csv_names=["monthly_visit_summary.csv"])
             monthly.columns = monthly.columns.astype(str).str.strip()
-
             if "visit_count" in monthly.columns:
-                monthly["visit_count"] = pd.to_numeric(
-                    monthly["visit_count"],
-                    errors="coerce"
-                )
+                monthly["visit_count"] = pd.to_numeric(monthly["visit_count"], errors="coerce")
         except Exception:
             monthly = None
 
@@ -523,73 +373,55 @@ if df is None:
         "`visits_with_monthly_count.zip`"
     )
     st.stop()
-# Process patient data
+
+
 # ============================================================
+# Process patient data — cached + vectorized (จุดที่หน่วงที่สุดเดิม)
+# ============================================================
+@st.cache_data(show_spinner=False)
 def process_patient_data(dataframe):
     df_proc = dataframe.copy()
 
-    # ใช้วันที่ล่าสุดในข้อมูลเป็นจุดอ้างอิง
     today = df_proc["visit_date"].max()
-
-    # หากไม่มีวันที่ที่ใช้ได้ ป้องกัน days_since_last_visit เป็น NaN
     if pd.isna(today):
         today = pd.Timestamp.today().normalize()
 
-    # 1) ระบุผู้ป่วยกลุ่มล้างไตจากข้อความวินิจฉัย
-    def is_dialysis(text):
-        if pd.isna(text):
-            return False
-
-        text = str(text).lower()
-
-        keywords = ["ไต", "kidney", "dialysis", "ckd"]
-        return any(keyword in text for keyword in keywords)
-
+    # 1) ระบุผู้ป่วยกลุ่มล้างไต — vectorized string match แทน .apply row-by-row
     if "diagnosis_text" in df_proc.columns:
-        df_proc["is_dialysis"] = df_proc["diagnosis_text"].apply(is_dialysis)
+        text_lower = df_proc["diagnosis_text"].fillna("").astype(str).str.lower()
+        df_proc["is_dialysis"] = text_lower.str.contains("ไต|kidney|dialysis|ckd", regex=True)
     else:
         df_proc["is_dialysis"] = False
 
-    # 2) คำนวณจำนวนวันตั้งแต่มารับบริการครั้งนั้น
+    # 2) จำนวนวันตั้งแต่มารับบริการครั้งนั้น
     if "visit_date" in df_proc.columns:
         df_proc["days_since_last_visit"] = (
-            today - df_proc["visit_date"]
-        ).dt.days
-
-        # วันที่ว่าง ให้เป็น 0 เพื่อไม่ให้การจัดลำดับล้ม
-        df_proc["days_since_last_visit"] = (
-            df_proc["days_since_last_visit"]
-            .fillna(0)
-            .clip(lower=0)
+            (today - df_proc["visit_date"]).dt.days.fillna(0).clip(lower=0)
         )
     else:
         df_proc["days_since_last_visit"] = 0
 
-    # 3) กำหนดระดับความเร่งด่วน
-    def assign_priority(row):
-        days = row.get("days_since_last_visit", 0)
-        disease = str(row.get("disease_group", ""))
+    # 3) ระดับความเร่งด่วน — np.select แทน .apply(axis=1)
+    days = df_proc["days_since_last_visit"]
+    disease = df_proc["disease_group"].astype(str)
+    is_dia = df_proc["is_dialysis"]
+    is_diabetes = disease.str.contains("เบาหวาน")
 
-        if row.get("is_dialysis", False):
-            if days > 7:
-                return "P1-Urgent"
-            elif days > 3:
-                return "P2-Warning"
-            return "P3-Normal"
-
-        if "เบาหวาน" in disease:
-            if days > 90:
-                return "P1-Urgent"
-            elif days > 30:
-                return "P2-Warning"
-            return "P3-Normal"
-
-        if days > 180:
-            return "P1-Urgent"
-
-        return "P3-Normal"
-
-    df_proc["priority_status"] = df_proc.apply(assign_priority, axis=1)
+    conditions = [
+        is_dia & (days > 7),
+        is_dia & (days > 3),
+        is_dia,
+        (~is_dia) & is_diabetes & (days > 90),
+        (~is_dia) & is_diabetes & (days > 30),
+        (~is_dia) & is_diabetes,
+        (~is_dia) & (~is_diabetes) & (days > 180),
+    ]
+    choices = [
+        "P1-Urgent", "P2-Warning", "P3-Normal",
+        "P1-Urgent", "P2-Warning", "P3-Normal",
+        "P1-Urgent",
+    ]
+    df_proc["priority_status"] = np.select(conditions, choices, default="P3-Normal")
 
     return df_proc
 
@@ -598,33 +430,44 @@ def process_patient_data(dataframe):
 df = process_patient_data(df)
 
 
-
-
-
 # ============================================================
-# Lead scoring (optional sklearn)
+# Lead scoring (optional sklearn) — แยก cache การสร้าง summary_pts
+# ออกจากการเทรนโมเดล เพื่อไม่ให้ groupby รันใหม่ทุก rerun
 # ============================================================
-@st.cache_resource
+@st.cache_data(show_spinner=False)
+def build_summary_pts(dataframe):
+    agg_kwargs = {
+        "bmi": ("bmi", "mean"),
+        "systolic": ("systolic", "mean"),
+        "gender_code": ("gender_code", "first"),
+        "age_at_visit": ("age_at_visit", "max"),
+    }
+    if "visit_id" in dataframe.columns:
+        agg_kwargs["visits"] = ("visit_id", "count")
+    else:
+        agg_kwargs["visits"] = ("patient_id", "count")
+
+    sp = dataframe.groupby("patient_id").agg(**agg_kwargs).round(1)
+    sp["systolic"] = sp["systolic"].fillna(dataframe["systolic"].median())
+    sp["target"] = ((sp["visits"] >= 3) | (sp["systolic"] >= 135)).astype(int)
+    return sp
+
+
+@st.cache_resource(show_spinner=False)
 def build_scorer(data):
     if not SKLEARN_AVAILABLE or len(data) < 10:
         return None
-    feats = ["visits","bmi","systolic","gender_code"]
+    feats = ["visits", "bmi", "systolic", "gender_code"]
     X, y = data[feats], data["target"]
     return RandomForestClassifier(n_estimators=60, max_depth=4, random_state=42).fit(X, y)
 
+
 summary_pts = high_lead_count = est_pipeline = clf = None
 if "patient_id" in df.columns:
-    agg_kwargs = {"bmi":("bmi","mean"), "systolic":("systolic","mean"), "gender_code":("gender_code","first"), "age_at_visit":("age_at_visit","max")}
-    if "visit_id" in df.columns:
-        agg_kwargs["visits"] = ("visit_id","count")
-    else:
-        agg_kwargs["visits"] = ("patient_id","count")
-    summary_pts = df.groupby("patient_id").agg(**agg_kwargs).round(1)
-    summary_pts["systolic"] = summary_pts["systolic"].fillna(df["systolic"].median())
-    summary_pts["target"] = ((summary_pts["visits"] >= 3) | (summary_pts["systolic"] >= 135)).astype(int)
+    summary_pts = build_summary_pts(df)
     clf = build_scorer(summary_pts)
     if clf is not None:
-        probs = clf.predict_proba(summary_pts[["visits","bmi","systolic","gender_code"]])[:,1]
+        probs = clf.predict_proba(summary_pts[["visits", "bmi", "systolic", "gender_code"]])[:, 1]
         summary_pts["lead_score"] = (probs * 100).astype(int)
         high_lead_count = int((summary_pts["lead_score"] >= 60).sum())
         est_pipeline = high_lead_count * 3000
@@ -633,17 +476,341 @@ if "patient_id" in df.columns:
 
 
 # ============================================================
+# Fragment-wrapped interactive sections
+# ห่อด้วย @st.fragment เพื่อให้คลิกปุ่ม/เลือกแถวในตาราง ไม่ต้อง
+# rerun กราฟหนักๆ (sunburst, scatter, pyramid) ทั้งหน้า
+# ============================================================
+
+@st.fragment
+def render_action_panel(dv):
+    """Command Action Panel: Alert List + Outreach scheduling"""
+    high_risk = dv[dv["critical_risk"] == 1]
+    if "patient_id" in high_risk.columns:
+        high_risk = (
+            high_risk[["patient_id", "disease_group", "bmi", "systolic", "diastolic"]]
+            .drop_duplicates("patient_id")
+            .sort_values(["systolic", "bmi"], ascending=False)
+        )
+
+    ac1, ac2 = st.columns(2)
+    with ac1:
+        st.markdown('<div class="action-btn">', unsafe_allow_html=True)
+        gen = st.button("🔔 Alert List", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    with ac2:
+        st.markdown('<div class="action-btn-secondary">', unsafe_allow_html=True)
+        sched = st.button("📅 Outreach", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if gen:
+        if not high_risk.empty:
+            st.success(f"✅ {len(high_risk)} รายการ")
+            st.download_button(
+                "📥 ดาวน์โหลด CSV",
+                high_risk.to_csv(index=False).encode("utf-8-sig"),
+                "alert_list.csv", "text/csv", use_container_width=True
+            )
+        else:
+            st.info("ไม่มีกลุ่มเสี่ยงวิกฤต")
+
+    if "outreach_q" not in st.session_state:
+        st.session_state["outreach_q"] = []
+    if sched:
+        st.session_state["show_sched"] = True
+    if st.session_state.get("show_sched"):
+        with st.form("sched_form"):
+            ids = st.multiselect(
+                "เลือก Patient",
+                high_risk["patient_id"].tolist() if not high_risk.empty else [],
+                default=(high_risk["patient_id"].tolist()[:5] if not high_risk.empty else [])
+            )
+            d = st.date_input("วันที่นัด")
+            note = st.text_area("บันทึก")
+            if st.form_submit_button("ยืนยัน"):
+                st.session_state["outreach_q"].append({"วัน": str(d), "ราย": len(ids), "บันทึก": note})
+                st.session_state["show_sched"] = False
+                st.success(f"✅ กำหนดการ {len(ids)} ราย")
+    if st.session_state["outreach_q"]:
+        st.dataframe(pd.DataFrame(st.session_state["outreach_q"]), use_container_width=True, hide_index=True)
+
+    return high_risk
+
+
+def _recommend_package(row):
+    """ประเมินแพ็กเกจจากช่วงอายุและเพศ รวมถึงการคัดกรองพิเศษ"""
+    age = row.get("age_at_visit", 35)
+    gender_code = row.get("gender_code", 0.5)
+
+    if age >= 50:
+        pkg_name, base_price = "Longevity Package", 8000
+    elif age >= 30:
+        pkg_name, base_price = "Advanced Package", 5500
+    else:
+        pkg_name, base_price = "Essential Package", 3000
+
+    screenings = []
+    add_on_price = 0
+    if gender_code > 0.5 and age >= 40:
+        screenings.append("Mammogram")
+        add_on_price += 2000
+    if gender_code < 0.5 and age >= 50:
+        screenings.append("PSA (มะเร็งต่อมลูกหมาก)")
+        add_on_price += 2000
+
+    return pkg_name, base_price, screenings, add_on_price
+
+
+def _analyze_patient_risk(row):
+    """คำนวณ Health Score (0-100%) และคำแนะนำแพ็กเกจ"""
+    score = 100
+    reasons = []
+
+    sys_val = row.get("systolic", 0)
+    bmi_val = row.get("bmi", 22)
+    visits_val = row.get("visits", 1)
+
+    if sys_val >= 160:
+        score -= 40
+        reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 ความดันวิกฤต ({sys_val:.0f})</span>")
+    elif sys_val >= 140:
+        score -= 25
+        reasons.append(f"<span style='background:#F8C6C0; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 ความดันสูง ({sys_val:.0f})</span>")
+    elif sys_val >= 130:
+        score -= 10
+        reasons.append(f"<span style='background:#FEF0C7; color:#B54708; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 เฝ้าระวังความดัน ({sys_val:.0f})</span>")
+
+    if bmi_val >= 30:
+        score -= 20
+        reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>📈 โรคอ้วน ({bmi_val:.1f})</span>")
+    elif bmi_val >= 25:
+        score -= 10
+        reasons.append(f"<span style='background:#FEF0C7; color:#B54708; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>📈 น้ำหนักเกิน ({bmi_val:.1f})</span>")
+
+    if visits_val >= 5:
+        score -= 15
+        reasons.append(f"<span style='background:#E0F2FE; color:#0369A1; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มารพ. บ่อยผิดปกติ ({visits_val:.0f} ครั้ง)</span>")
+    elif visits_val >= 3:
+        score -= 5
+        reasons.append(f"<span style='background:#F1F5F9; color:#475569; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มีประวัติมาซ้ำ ({visits_val:.0f} ครั้ง)</span>")
+
+    pkg_name, base_price, screenings, add_on_price = _recommend_package(row)
+
+    if screenings:
+        score -= 5
+        for sc in screenings:
+            reasons.append(f"<span style='background:#F3E8FF; color:#7E22CE; border:1px solid #D8B4FE; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🎗️ แนะนำ {sc}</span>")
+
+    if not reasons:
+        reasons.append("<span style='background:#ECFDF5; color:#065F46; padding:4px 8px; border-radius:12px; font-size:0.7rem; display:inline-block; margin-bottom:4px;'>✅ สุขภาพอยู่ในเกณฑ์ปกติ</span>")
+
+    return max(0, score), "".join(reasons), pkg_name, base_price + add_on_price, screenings
+
+
+@st.fragment
+def render_patient_profile(avail_df, summary_pts, dv, sel_idx):
+    """Patient Profile & Package Recommendation — ห่อ fragment เพื่อไม่ให้
+    การเลือกคนไข้/สลับ tab ไปกระทบกราฟส่วนอื่นของหน้า"""
+    st.markdown('<div class="panel-title">📋 Patient Profile & Recommendation</div>', unsafe_allow_html=True)
+
+    if sel_idx and avail_df is not None:
+        sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
+        pt_data = summary_pts.loc[sel_pid]
+
+        score, reasons_html, pkg_name, total_price, screenings = _analyze_patient_risk(pt_data)
+        gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
+
+        if score <= 60: c_tx, badge = "#B3261E", "🚨 High Risk"
+        elif score <= 80: c_tx, badge = "#B54708", "⚠️ Medium Risk"
+        else: c_tx, badge = "#065F46", "🌱 Low Risk"
+
+        st.markdown(f"""
+        <div style="background:{SURFACE}; border:1px solid #E2E8F0; border-radius:12px; padding:18px; margin-top:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:14px;">
+                <div style="font-size:2.4rem; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:50%; width:54px; height:54px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
+                <div>
+                    <div style="font-weight:700; color:{INK}; font-size:1.15rem;">{sel_pid}</div>
+                    <div style="font-size:0.75rem; color:{MUTED}; margin-bottom:2px;">อายุ: {pt_data['age_at_visit']:.0f} ปี</div>
+                    <div style="font-size:0.75rem; font-weight:600; color:{c_tx}; background:#F8FAFC; padding:2px 6px; border-radius:6px; display:inline-block;">{badge}</div>
+                </div>
+            </div>
+          </div>
+        """, unsafe_allow_html=True)
+
+        tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
+
+        with tab1:
+            st.markdown(f"""
+            <div style="text-align:center; margin-bottom:16px;">
+                <div style="font-size:0.75rem; color:{MUTED}; font-weight:600;">Health Score</div>
+                <div style="font-size:2.5rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.1;">{score}%</div>
+            </div>
+            <div style="font-size:0.78rem; font-weight:600; color:{INK}; margin-bottom:8px;">💡 AI Analysis Insights:</div>
+            <div style="margin-bottom:12px; line-height:1.6;">
+                {reasons_html}
+            </div>
+            """, unsafe_allow_html=True)
+
+        with tab2:
+            hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
+            if not hist_df.empty:
+                st.markdown('<div style="font-size:0.75rem; color:#5B6B6B; margin-bottom:8px;">Timeline การมารับบริการ</div>', unsafe_allow_html=True)
+                disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
+                disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
+                disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
+
+                def highlight_risk(row):
+                    if row["Risk"] == 1: return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+                    if pd.notna(row["Sys"]) and row["Sys"] >= 140: return ["background-color:#F8C6C0"] * len(row)
+                    if pd.notna(row["BMI"]) and row["BMI"] >= 25: return ["background-color:#FEF0C7"] * len(row)
+                    return [""] * len(row)
+
+                st.dataframe(disp_hist.style.apply(highlight_risk, axis=1),
+                             use_container_width=True, hide_index=True, height=220,
+                             column_config={"Risk": None})
+            else:
+                st.info("ไม่พบประวัติการรับบริการในระบบ")
+
+        with tab3:
+            pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
+            st.markdown(f"""
+            <div style="background:#F0F9FF; border-left:4px solid #0284C7; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+                <div style="font-size:0.7rem; color:#0284C7; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Package หลัก</div>
+                <div style="font-size:1.05rem; font-weight:700; color:{INK};">{pkg_name}</div>
+                <div style="font-size:0.7rem; color:{MUTED}; margin-bottom:4px;">{pkg_info.get("desc", "")}</div>
+                <div style="font-size:0.85rem; font-weight:600; color:{MUTED}; font-family:'IBM Plex Mono',monospace;">฿ {pkg_info.get("price", 0):,.0f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if pkg_info.get("tests"):
+                st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-bottom:4px;">รายการตรวจหลัก:</div>', unsafe_allow_html=True)
+                for t in pkg_info["tests"]:
+                    st.markdown(f'<div style="font-size:0.7rem; color:#5B6B6B; padding-left:12px;">• {t}</div>', unsafe_allow_html=True)
+
+            if screenings:
+                st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-top:10px; margin-bottom:4px; color:#7E22CE;">🔍 Add-on เฉพาะบุคคล:</div>', unsafe_allow_html=True)
+                for sc in screenings:
+                    sp = SPECIAL_SCREENINGS.get(sc, {})
+                    st.markdown(f'<div style="font-size:0.7rem; color:#7E22CE; padding-left:12px;">+ {sc} (฿{sp.get("price", 0):,.0f})</div>', unsafe_allow_html=True)
+
+            st.markdown(f"""
+            <div style="text-align:right; margin-top:12px; padding-top:8px; border-top:1px dashed #CBD5E1;">
+                <span style="font-size:0.75rem; color:{MUTED};">รวมประเมินราคา: </span>
+                <span style="font-size:1.2rem; font-weight:700; color:{TEAL};">฿ {total_price:,.0f}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown('<div class="action-btn" style="margin-top:14px;">', unsafe_allow_html=True)
+            if st.button("✨ Generate Personalized Proposal", use_container_width=True):
+                with st.spinner("กำลังเชื่อมต่อระบบ CRM/LINE API..."):
+                    time.sleep(1)
+                    st.success("✅ ส่งข้อมูลให้ระบบเรียบร้อย! (Webhook API Mockup)")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            export_text = f"--- Personalized Health Proposal ---\nPatient ID: {sel_pid}\nAge: {pt_data['age_at_visit']:.0f}\nHealth Score: {score}%\nRisk Level: {badge}\n\nRecommended Package: {pkg_name} (฿{pkg_info.get('price', 0):,.0f})\nDescription: {pkg_info.get('desc', '')}\n"
+            if screenings:
+                export_text += "\nAdd-on Screenings:\n"
+                for sc in screenings:
+                    sp = SPECIAL_SCREENINGS.get(sc, {})
+                    export_text += f"- {sc} (฿{sp.get('price', 0):,.0f})\n"
+            export_text += f"\nTotal Estimated Price: ฿{total_price:,.0f}\n"
+
+            st.download_button(
+                label="📥 Export Summary (Text)",
+                data=export_text.encode('utf-8'),
+                file_name=f"proposal_{sel_pid}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f"""
+        <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:12px; padding:30px 16px; text-align:center; color:{MUTED};">
+            <div style="font-size:2rem; margin-bottom:10px;">👈</div>
+            <div style="font-size:0.9rem; font-weight:600;">คลิกเลือกผู้ป่วยจากตารางด้านซ้าย</div>
+            <div style="font-size:0.8rem; margin-top:4px;">เพื่อดู Health Score และการแนะนำแพ็กเกจที่เหมาะสม</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+@st.fragment
+def render_disease_center(dv, df, selected_tab_key, active_config, search_term):
+    """Disease-specific Command Center — ห่อ fragment เพื่อให้การเลือกแถว/
+    กด Generate Package ไม่ทำให้ต้อง rerun ตัวกรองทั้งหน้าใหม่"""
+    disease_df = dv[active_config["filter_condition"](dv)].copy()
+
+    st.markdown(f'<div class="header-title">{active_config["icon"]} {selected_tab_key} Command Center</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="header-sub">เป้าหมายการรักษา: {active_config["target_desc"]}</div><br>', unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("จำนวนผู้ป่วย (ตามตัวกรอง)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} คน")
+    p1_count = len(disease_df[disease_df["priority_status"] == "P1-Urgent"])
+    c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน", delta="-ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
+
+    if search_term and "patient_id" in disease_df.columns:
+        disease_df = disease_df[disease_df["patient_id"].astype(str).str.contains(search_term, case=False)]
+
+    st.markdown("### 🚨 รายชื่อผู้ป่วย (Priority List)")
+    if not disease_df.empty:
+        sort_df = disease_df.sort_values(by=["priority_status"], ascending=True).copy()
+
+        show_cols = ["patient_id", "visit_date", "days_since_last_visit", "priority_status", "systolic", "bmi"]
+        show_cols = [c for c in show_cols if c in sort_df.columns]
+
+        def highlight_priority(row):
+            if row.get("priority_status") == "P1-Urgent": return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+            if row.get("priority_status") == "P2-Warning": return ["background-color:#FEF0C7; color:#B54708"] * len(row)
+            return [""] * len(row)
+
+        selection = st.dataframe(
+            sort_df[show_cols].style.apply(highlight_priority, axis=1),
+            use_container_width=True, hide_index=True, on_select="rerun",
+            selection_mode="single-row", key=f"table_{selected_tab_key}"
+        )
+
+        sel_idx = selection.selection.rows
+        if sel_idx:
+            sel_pid = sort_df.iloc[sel_idx[0]]["patient_id"]
+            st.markdown(f"### 💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}")
+
+            pt_all_visits = df[df["patient_id"] == sel_pid]
+
+            combined_tests = []
+            risk_multiplier = 1.0
+            found_diseases = []
+
+            for k, v in DISEASE_CONFIG.items():
+                if v.get("is_general"): continue
+                if any(v["filter_condition"](pt_all_visits)):
+                    combined_tests.extend(v["Key_Tests"])
+                    risk_multiplier += 0.2
+                    found_diseases.append(k)
+
+            combined_tests = list(set(combined_tests))
+
+            st.info(f"**พหุโรค (Multi-morbidity):** พบ {len(found_diseases)} โรคเรื้อรังซ้อนทับ ได้แก่ {', '.join(found_diseases)} (Risk Multiplier: {risk_multiplier:.1f}x)")
+
+            if st.button(f"✨ Generate {selected_tab_key} Care Package", key="btn_combo_pkg"):
+                st.success(f"✅ **สร้าง {selected_tab_key} Package สำเร็จ!**")
+                price = len(combined_tests) * 500 + 1500
+                st.markdown(f"**ราคาประเมินรวม:** ฿ {price:,.0f}")
+                st.markdown("**รายการตรวจที่สำคัญที่สุด (Merging Tests from Multi-morbidity):**")
+                for t in combined_tests:
+                    st.markdown(f"- {t}")
+    else:
+        st.info("ไม่พบคนไข้ในกลุ่มนี้")
+
 
 # ============================================================
 # Tabbed Folder System (st.radio styled as tabs)
 # ============================================================
 st.markdown('''
 <style>
-/* Style the radio buttons to look like tabs */
 div.stRadio > div[role='radiogroup'] {
     flex-direction: row;
     gap: 2px;
-    border-bottom: 2px solid #0E5C56; /* Teal line under tabs */
+    border-bottom: 2px solid #0E5C56;
     margin-bottom: 20px;
 }
 div.stRadio > div[role='radiogroup'] > label {
@@ -679,17 +846,16 @@ active_config = DISEASE_CONFIG[selected_tab_key]
 # ============================================================
 with st.sidebar:
     st.markdown(f"### 🎛️ Filter Scope: {selected_tab_key}")
-    
-    # Contextual Search Bar
+
     if active_config.get("is_general"):
         st.info("💡 เลือกแฟ้มกลุ่มโรคด้านบน เพื่อเปิดโหมดจัดการเฉพาะทาง (Command Center)")
         search_term = ""
     else:
         search_term = st.text_input(f"🔍 ค้นหาคนไข้ (ID)", key="ctx_search")
-        
+
     all_diseases = sorted(df["disease_group"].unique())
     disease_sel  = st.multiselect("กลุ่มโรค",  all_diseases,  default=all_diseases)
-    
+
     all_genders  = sorted(df["gender"].unique())
     gender_sel   = st.multiselect("เพศ",        all_genders,   default=all_genders)
 
@@ -754,7 +920,7 @@ if has_date and date_filter and isinstance(date_filter,(list,tuple)) and len(dat
 if active_config.get("is_general"):
     as_of     = df["visit_date"].max()
     as_of_str = as_of.strftime("%d %b %Y") if pd.notna(as_of) else "ไม่ระบุ"
-    
+
     st.markdown(f"""
     <div class="header-bar">
       <div>
@@ -764,11 +930,9 @@ if active_config.get("is_general"):
       <span class="asof-chip">ข้อมูลล่าสุด {as_of_str} · {df['clinic_name'].nunique()} คลินิก</span>
     </div>
     """, unsafe_allow_html=True)
-    
-    
-    # ============================================================
+
+
     # Section 1 — Pulse + KPIs
-    # ============================================================
     total_v   = len(dv)
     uniq_pts  = dv["patient_id"].nunique() if "patient_id" in dv.columns else total_v
     risk_pts  = dv[dv["critical_risk"]==1]["patient_id"].nunique() if "patient_id" in dv.columns else 0
@@ -777,12 +941,12 @@ if active_config.get("is_general"):
     bp_ok_pct = dv["systolic"].notna().mean() * 100
     miss_bp   = dv["systolic"].isna().mean() * 100
     uncoded   = (dv["disease_group"]=="อื่น ๆ").mean() * 100 if "อื่น ๆ" in dv["disease_group"].unique() else 0
-    
+
     health_score = round((max(0, 100 - risk_pct*2) + bp_ok_pct) / 2)
     if health_score >= 80:   health_status, health_color = "ปกติดี",       SAGE
     elif health_score >= 60: health_status, health_color = "เฝ้าระวัง",    AMBER
     else:                    health_status, health_color = "ต้องดำเนินการ", RED
-    
+
     pulse_col, kpi_col = st.columns([1, 3])
     with pulse_col:
         st.markdown(f"""
@@ -795,7 +959,7 @@ if active_config.get("is_general"):
           </div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with kpi_col:
         k1,k2,k3,k4 = st.columns(4)
         k1.metric("จำนวนเคส",        f"{total_v:,}",
@@ -807,13 +971,11 @@ if active_config.get("is_general"):
         k4.metric("กลุ่มเสี่ยงวิกฤต", f"{risk_pct:.1f}%",
                   delta=f"{delta_r:+.1f} pp {compare_label}" if delta_r is not None else f"{risk_pts:,} คน",
                   delta_color="inverse")
-    
+
     st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-    
-    
-    # ============================================================
+
+
     # Section 2 — Data Quality Indicator
-    # ============================================================
     def quality_meter(label, pct, note):
         c = SAGE if pct >= 80 else (AMBER if pct >= 50 else RED)
         st.markdown(f"""
@@ -825,7 +987,7 @@ if active_config.get("is_general"):
           <div class="meter-track"><div class="meter-fill" style="width:{max(pct,2):.0f}%;background:{c};"></div></div>
           <div style="font-size:0.68rem;color:{MUTED};margin-top:2px;">{note}</div>
         </div>""", unsafe_allow_html=True)
-    
+
     with st.container(key="card_dq"):
         st.markdown('<div class="panel-title">📊 Data Quality Indicator</div>', unsafe_allow_html=True)
         q1,q2,q3,q4 = st.columns(4)
@@ -833,13 +995,11 @@ if active_config.get("is_general"):
         with q2: quality_meter("ครอบคลุมกลุ่มผู้ใหญ่",  100-(~dv["is_adult"]).mean()*100, f"{(~dv['is_adult']).mean()*100:.1f}% เป็นเด็ก")
         with q3: quality_meter("จัดหมวดโรคสำเร็จ",        100-uncoded,  f"{uncoded:.0f}% ยังอยู่ใน 'อื่น ๆ'")
         with q4: quality_meter("มีข้อมูล BMI จริง",       100-dv["bmi_imputed"].mean()*100, "ที่เหลือ imputed ด้วยค่ากลาง")
-    
+
     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-    
-    
-    # ============================================================
+
+
     # Section 3 — Sunburst + Command Action Panel
-    # ============================================================
     def build_sunburst(data, top_n=SUNBURST_TOP_N):
         rows, top_map = [], {}
         for grp, sub in data.groupby("disease_group"):
@@ -852,21 +1012,21 @@ if active_config.get("is_general"):
             if rest > 0:
                 rows.append({"disease_group":grp,"diagnosis":"อื่นๆ ในกลุ่มนี้","count":int(rest)})
         return pd.DataFrame(rows), top_map
-    
+
     hero_l, hero_r = st.columns([1.7,1])
-    
+
     with hero_l:
         with st.container(key="card_sunburst"):
             st.markdown('<div class="panel-title">🔬 โครงสร้างการวินิจฉัย — คลิกเพื่อเจาะลึก</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="panel-sub">{uncoded:.0f}% ของเคสอยู่ใน "อื่น ๆ" — คลิกวงในดูกลุ่มโรค วงนอกดูรหัสวินิจฉัย</div>', unsafe_allow_html=True)
-    
+
             sun_df, top_map = build_sunburst(dv)
             if not sun_df.empty:
                 fig_sun = px.sunburst(sun_df, path=["disease_group","diagnosis"], values="count",
                                        color="disease_group", color_discrete_map=DISEASE_COLORS)
                 fig_sun.update_layout(margin=dict(l=0,r=0,t=6,b=6), height=420, paper_bgcolor="rgba(0,0,0,0)")
                 fig_sun.update_traces(textfont_size=11, insidetextorientation="radial")
-    
+
                 click = st.plotly_chart(fig_sun, use_container_width=True,
                                          on_select="rerun", selection_mode="points", key="sun_click")
                 sel_label = sel_group = None
@@ -874,7 +1034,7 @@ if active_config.get("is_general"):
                     pt = click.selection["points"][0]
                     sel_label = pt.get("label")
                     sel_group = pt.get("parent") or sel_label
-    
+
                 if sel_label:
                     if sel_label in DISEASE_COLORS:
                         drill = dv[dv["disease_group"]==sel_label]
@@ -887,12 +1047,12 @@ if active_config.get("is_general"):
                     else:
                         drill = dv[dv["diagnosis_clean"]==sel_label]
                         st.markdown(f'<div class="drill-banner">🔍 {sel_label} · {len(drill)} เคส</div>', unsafe_allow_html=True)
-    
+
                     show_c = [c for c in ["patient_id","clinic_name","age_at_visit","gender","bmi","systolic"] if c in drill.columns]
                     st.dataframe(drill[show_c].head(10), use_container_width=True, hide_index=True, height=180)
                 else:
                     st.caption("👆 คลิกส่วนใดของผังเพื่อดูรายละเอียด")
-    
+
     with hero_r:
         with st.container(key="card_bp_donut"):
             st.markdown('<div class="panel-title">🩺 ระดับความดันโลหิต</div>', unsafe_allow_html=True)
@@ -904,60 +1064,17 @@ if active_config.get("is_general"):
                                    margin=dict(l=0,r=0,t=10,b=0),
                                    legend=dict(orientation="h",yanchor="bottom",y=-0.3,font=dict(size=9)))
             st.plotly_chart(fig_pie, use_container_width=True)
-    
+
         st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-    
+
         with st.container(key="card_action"):
             st.markdown('<div class="panel-title">⚡ Command Action Panel</div>', unsafe_allow_html=True)
-            high_risk = dv[dv["critical_risk"]==1]
-            if "patient_id" in high_risk.columns:
-                high_risk = high_risk[["patient_id","disease_group","bmi","systolic","diastolic"]]\
-                    .drop_duplicates("patient_id").sort_values(["systolic","bmi"],ascending=False)
-    
-            ac1, ac2 = st.columns(2)
-            with ac1:
-                st.markdown('<div class="action-btn">', unsafe_allow_html=True)
-                gen = st.button("🔔 Alert List", use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            with ac2:
-                st.markdown('<div class="action-btn-secondary">', unsafe_allow_html=True)
-                sched = st.button("📅 Outreach", use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-    
-            if gen:
-                if not high_risk.empty:
-                    st.success(f"✅ {len(high_risk)} รายการ")
-                    st.download_button("📥 ดาวน์โหลด CSV",
-                                        high_risk.to_csv(index=False).encode("utf-8-sig"),
-                                        "alert_list.csv", "text/csv", use_container_width=True)
-                else:
-                    st.info("ไม่มีกลุ่มเสี่ยงวิกฤต")
-    
-            if "outreach_q" not in st.session_state:
-                st.session_state["outreach_q"] = []
-            if sched:
-                st.session_state["show_sched"] = True
-            if st.session_state.get("show_sched"):
-                with st.form("sched_form"):
-                    ids = st.multiselect("เลือก Patient",
-                        high_risk["patient_id"].tolist() if not high_risk.empty else [],
-                        default=(high_risk["patient_id"].tolist()[:5] if not high_risk.empty else []))
-                    d = st.date_input("วันที่นัด")
-                    note = st.text_area("บันทึก")
-                    if st.form_submit_button("ยืนยัน"):
-                        st.session_state["outreach_q"].append({"วัน":str(d),"ราย":len(ids),"บันทึก":note})
-                        st.session_state["show_sched"] = False
-                        st.success(f"✅ กำหนดการ {len(ids)} ราย")
-            if st.session_state["outreach_q"]:
-                st.dataframe(pd.DataFrame(st.session_state["outreach_q"]),
-                              use_container_width=True, hide_index=True)
-    
+            high_risk = render_action_panel(dv)
+
     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-    
-    
-    # ============================================================
+
+
     # Section 4 — Risk Table
-    # ============================================================
     with st.container(key="card_risktable"):
         st.markdown('<div class="panel-title">🚨 รายชื่อผู้ป่วยกลุ่มเสี่ยงสูง</div>', unsafe_allow_html=True)
         st.markdown('<div class="panel-sub">ไล่สีตามความรุนแรงของ Systolic BP</div>', unsafe_allow_html=True)
@@ -965,8 +1082,8 @@ if active_config.get("is_general"):
             disp = high_risk.copy()
             disp.columns = [c[:4]+"…" if len(c)>6 else c for c in disp.columns]
             disp.columns = ["ID","กลุ่มโรค","BMI","Sys","Dia"]
-    
-            if AGGRID_AVAILABLE:
+
+            if AGGRID_AVAILABLE and USE_AGGRID:
                 row_js = JsCode("""function(p){
                     if(p.data.Sys>=180) return{'backgroundColor':'#F3A9A5','color':'#5A0E0E'};
                     if(p.data.Sys>=160) return{'backgroundColor':'#F8C6C0'};
@@ -984,21 +1101,19 @@ if active_config.get("is_general"):
                     if row["Sys"] >= 140: return ["background-color:#FBE1DE"]*5
                     return [""]*5
                 st.dataframe(disp.style.apply(hl,axis=1), use_container_width=True, hide_index=True, height=260)
-    
+
             st.download_button(f"📥 Export ({len(high_risk)} ราย)",
                                 high_risk.to_csv(index=False).encode("utf-8-sig"),
                                 "critical_risk.csv","text/csv",use_container_width=True)
         else:
             st.success("✅ ไม่พบคนไข้ในเกณฑ์ความเสี่ยงวิกฤต")
-    
+
     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-    
-    
-    # ============================================================
+
+
     # Section 5 — Population Pyramid + Clinic + BMI-BP Scatter
-    # ============================================================
     p2,p3 = st.columns([1,1])
-    
+
     with p2:
         with st.container(key="card_clinic"):
             st.markdown('<div class="panel-title">🏢 Top 10 คลินิก</div>', unsafe_allow_html=True)
@@ -1012,7 +1127,7 @@ if active_config.get("is_general"):
             fig_cl.update_yaxes(title=None)
             fig_cl.update_xaxes(title="จำนวนเคส")
             st.plotly_chart(fig_cl, use_container_width=True)
-    
+
     with p3:
         with st.container(key="card_scatter"):
             st.markdown('<div class="panel-title">⚖️ BMI vs Systolic BP</div>', unsafe_allow_html=True)
@@ -1034,108 +1149,18 @@ if active_config.get("is_general"):
                 st.plotly_chart(fig_sc, use_container_width=True)
             else:
                 st.caption("ไม่มีข้อมูลเพียงพอ")
-    
+
     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-    
-    
-    # ============================================================
-    # Section 6 — Smart Package Recommender & Clinical Health Trends
-    # ============================================================
-    
-    def recommend_package(row):
-        """ประเมินแพ็กเกจจากช่วงอายุและเพศ รวมถึงการคัดกรองพิเศษ"""
-        age = row.get("age_at_visit", 35)
-        gender_code = row.get("gender_code", 0.5)
-    
-        # 1. Base Package
-        if age >= 50:
-            pkg_name = "Longevity Package"
-            base_price = 8000
-        elif age >= 30:
-            pkg_name = "Advanced Package"
-            base_price = 5500
-        else:
-            pkg_name = "Essential Package"
-            base_price = 3000
-        
-        # 2. Special Screening
-        screenings = []
-        add_on_price = 0
-    
-        # หญิง (gender_code=1) อายุ >= 40 แนะนำ Mammogram
-        if gender_code > 0.5 and age >= 40:
-            screenings.append("Mammogram")
-            add_on_price += 2000
-        
-        # ชาย (gender_code=0) อายุ >= 50 แนะนำ PSA
-        if gender_code < 0.5 and age >= 50:
-            screenings.append("PSA (มะเร็งต่อมลูกหมาก)")
-            add_on_price += 2000
-        
-        return pkg_name, base_price, screenings, add_on_price
-    
-    
-    def analyze_patient_risk(row):
-        """
-        คำนวณ Health Score (0-100%) จากข้อมูลความดัน (BP), น้ำหนัก (BMI) และความถี่ในการพบแพทย์
-        และเพิ่มคำแนะนำแพ็กเกจ
-        """
-        score = 100
-        reasons = []
-    
-        sys_val = row.get("systolic", 0)
-        bmi_val = row.get("bmi", 22)
-        visits_val = row.get("visits", 1)
-    
-        # หักคะแนนความดัน
-        if sys_val >= 160:
-            score -= 40
-            reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 ความดันวิกฤต ({sys_val:.0f})</span>")
-        elif sys_val >= 140:
-            score -= 25
-            reasons.append(f"<span style='background:#F8C6C0; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 ความดันสูง ({sys_val:.0f})</span>")
-        elif sys_val >= 130:
-            score -= 10
-            reasons.append(f"<span style='background:#FEF0C7; color:#B54708; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🫀 เฝ้าระวังความดัน ({sys_val:.0f})</span>")
-        
-        # หักคะแนน BMI
-        if bmi_val >= 30:
-            score -= 20
-            reasons.append(f"<span style='background:#FBE1DE; color:#B3261E; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>📈 โรคอ้วน ({bmi_val:.1f})</span>")
-        elif bmi_val >= 25:
-            score -= 10
-            reasons.append(f"<span style='background:#FEF0C7; color:#B54708; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>📈 น้ำหนักเกิน ({bmi_val:.1f})</span>")
-        
-        # หักคะแนนความถี่ (บ่งบอกถึงปัญหาสุขภาพเรื้อรัง)
-        if visits_val >= 5:
-            score -= 15
-            reasons.append(f"<span style='background:#E0F2FE; color:#0369A1; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มารพ. บ่อยผิดปกติ ({visits_val:.0f} ครั้ง)</span>")
-        elif visits_val >= 3:
-            score -= 5
-            reasons.append(f"<span style='background:#F1F5F9; color:#475569; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🏥 มีประวัติมาซ้ำ ({visits_val:.0f} ครั้ง)</span>")
-        
-        # แนะนำแพ็กเกจและเพิ่ม Insight
-        pkg_name, base_price, screenings, add_on_price = recommend_package(row)
-    
-        if screenings:
-            score -= 5
-            for sc in screenings:
-                reasons.append(f"<span style='background:#F3E8FF; color:#7E22CE; border:1px solid #D8B4FE; padding:4px 8px; border-radius:12px; font-size:0.7rem; margin-right:4px; display:inline-block; margin-bottom:4px;'>🎗️ แนะนำ {sc}</span>")
-    
-        if not reasons:
-            reasons.append(f"<span style='background:#ECFDF5; color:#065F46; padding:4px 8px; border-radius:12px; font-size:0.7rem; display:inline-block; margin-bottom:4px;'>✅ สุขภาพอยู่ในเกณฑ์ปกติ</span>")
-        
-        return max(0, score), "".join(reasons), pkg_name, base_price + add_on_price, screenings
-    
-    
+
+
+    # Section 6 — Clinical Health Trends + Patient Profile fragment
     col_left, col_right = st.columns([1.6, 1])
-    
+
     with col_left:
         st.markdown('<div class="panel-title">📈 Clinical Health Trend by Age</div>', unsafe_allow_html=True)
         c_tab1, c_tab2, c_tab3 = st.tabs(["📊 Age-Risk Stacked Bar", "🎯 Conversion Donut", "👥 Population Pyramid"])
-    
+
         with c_tab1:
-            # Age-Risk Stacked Bar
             risk_age = dv.groupby(["age_group", "critical_risk"]).size().reset_index(name="n")
             risk_age["Risk Level"] = risk_age["critical_risk"].map({0: "ปกติ/เฝ้าระวัง", 1: "High Risk"})
             if not risk_age.empty:
@@ -1150,9 +1175,8 @@ if active_config.get("is_general"):
                 st.plotly_chart(fig_bar, use_container_width=True)
             else:
                 st.info("ไม่มีข้อมูล Risk แยกตามอายุ")
-            
+
         with c_tab2:
-            # Conversion Potential Donut
             if summary_pts is not None and "age_at_visit" in summary_pts.columns:
                 def est_pkg(age):
                     if age >= 50: return "Longevity (>50)"
@@ -1161,7 +1185,7 @@ if active_config.get("is_general"):
                 summary_pts["pkg_type"] = summary_pts["age_at_visit"].apply(est_pkg)
                 pkg_counts = summary_pts["pkg_type"].value_counts().reset_index()
                 pkg_counts.columns = ["Package", "Count"]
-            
+
                 fig_don = px.pie(pkg_counts, names="Package", values="Count", hole=0.55,
                                  color="Package", color_discrete_map={
                                      "Longevity (>50)": AMBER,
@@ -1172,8 +1196,7 @@ if active_config.get("is_general"):
                                       margin=dict(l=0, r=0, t=10, b=0),
                                       legend=dict(orientation="v", yanchor="middle", y=0.5, x=1.0))
                 st.plotly_chart(fig_don, use_container_width=True)
-            
-                # Text summary
+
                 st.markdown(f"""
                 <div style="text-align:center; font-size:0.8rem; color:{MUTED}; margin-top:-10px;">
                     มูลค่าคาดการณ์ (Base): <span style="color:{TEAL}; font-weight:700;">฿ {(pkg_counts[pkg_counts["Package"]=="Longevity (>50)"]["Count"].sum() * 8000 + pkg_counts[pkg_counts["Package"]=="Advanced (30-50)"]["Count"].sum() * 5500 + pkg_counts[pkg_counts["Package"]=="Essential (<30)"]["Count"].sum() * 3000):,.0f}</span>
@@ -1181,9 +1204,8 @@ if active_config.get("is_general"):
                 """, unsafe_allow_html=True)
             else:
                 st.info("ไม่มีข้อมูลผู้ป่วยที่สรุปได้")
-            
+
         with c_tab3:
-            # Population Pyramid
             age_order = ["0-9","10-19","20-29","30-39","40-49","50-59","60-69","70-79","80+"]
             pyr = dv.groupby(["pyramid_group","gender"]).size().reset_index(name="n")
             m_s = pyr[pyr["gender"]=="ช"].set_index("pyramid_group")["n"]
@@ -1206,10 +1228,10 @@ if active_config.get("is_general"):
                                               ticktext=[str(maxv),str(maxv//2),"0",str(maxv//2),str(maxv)],
                                               gridcolor="#F1F5F9"))
             st.plotly_chart(fig_pyr, use_container_width=True)
-    
+
         st.markdown("<div style='height:15px;'></div>", unsafe_allow_html=True)
         st.markdown('<div class="panel-title">🔍 เลือกผู้ป่วยเพื่อประเมิน Package (Search & Select)</div>', unsafe_allow_html=True)
-    
+
         if summary_pts is not None and "patient_id" in dv.columns:
             avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
             if not avail_df.empty:
@@ -1229,142 +1251,13 @@ if active_config.get("is_general"):
         else:
             avail_df = None
             sel_idx = []
-    
+
     with col_right:
-        st.markdown('<div class="panel-title">📋 Patient Profile & Recommendation</div>', unsafe_allow_html=True)
-    
-        if sel_idx and avail_df is not None:
-            sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
-            pt_data = summary_pts.loc[sel_pid]
-        
-            score, reasons_html, pkg_name, total_price, screenings = analyze_patient_risk(pt_data)
-            gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
-        
-            if score <= 60: c_tx, badge = "#B3261E", "🚨 High Risk"
-            elif score <= 80: c_tx, badge = "#B54708", "⚠️ Medium Risk"
-            else: c_tx, badge = "#065F46", "🌱 Low Risk"
-            
-            st.markdown(f"""
-            <div style="background:{SURFACE}; border:1px solid #E2E8F0; border-radius:12px; padding:18px; margin-top:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
-                <div style="display:flex; align-items:center; gap:14px;">
-                    <div style="font-size:2.4rem; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:50%; width:54px; height:54px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
-                    <div>
-                        <div style="font-weight:700; color:{INK}; font-size:1.15rem;">{sel_pid}</div>
-                        <div style="font-size:0.75rem; color:{MUTED}; margin-bottom:2px;">อายุ: {pt_data['age_at_visit']:.0f} ปี</div>
-                        <div style="font-size:0.75rem; font-weight:600; color:{c_tx}; background:#F8FAFC; padding:2px 6px; border-radius:6px; display:inline-block;">{badge}</div>
-                    </div>
-                </div>
-              </div>
-            """, unsafe_allow_html=True)
-        
-            tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
-        
-            with tab1:
-                st.markdown(f"""
-                <div style="text-align:center; margin-bottom:16px;">
-                    <div style="font-size:0.75rem; color:{MUTED}; font-weight:600;">Health Score</div>
-                    <div style="font-size:2.5rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.1;">{score}%</div>
-                </div>
-                <div style="font-size:0.78rem; font-weight:600; color:{INK}; margin-bottom:8px;">💡 AI Analysis Insights:</div>
-                <div style="margin-bottom:12px; line-height:1.6;">
-                    {reasons_html}
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with tab2:
-                # ดึงข้อมูลประวัติการวินิจฉัย
-                hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
-                if not hist_df.empty:
-                    st.markdown('<div style="font-size:0.75rem; color:#5B6B6B; margin-bottom:8px;">Timeline การมารับบริการ</div>', unsafe_allow_html=True)
-                    disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
-                    disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
-                    disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
-                
-                    # Conditional Formatting 
-                    def highlight_risk(row):
-                        if row["Risk"] == 1: return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
-                        if pd.notna(row["Sys"]) and row["Sys"] >= 140: return ["background-color:#F8C6C0"] * len(row)
-                        if pd.notna(row["BMI"]) and row["BMI"] >= 25: return ["background-color:#FEF0C7"] * len(row)
-                        return [""] * len(row)
-                
-                    st.dataframe(disp_hist.style.apply(highlight_risk, axis=1), 
-                                 use_container_width=True, hide_index=True, height=220,
-                                 column_config={"Risk": None})
-                else:
-                    st.info("ไม่พบประวัติการรับบริการในระบบ")
-                
-            with tab3:
-                pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
-                st.markdown(f"""
-                <div style="background:#F0F9FF; border-left:4px solid #0284C7; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
-                    <div style="font-size:0.7rem; color:#0284C7; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Package หลัก</div>
-                    <div style="font-size:1.05rem; font-weight:700; color:{INK};">{pkg_name}</div>
-                    <div style="font-size:0.7rem; color:{MUTED}; margin-bottom:4px;">{pkg_info.get("desc", "")}</div>
-                    <div style="font-size:0.85rem; font-weight:600; color:{MUTED}; font-family:'IBM Plex Mono',monospace;">฿ {pkg_info.get("price", 0):,.0f}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-                # Show Tests
-                if pkg_info.get("tests"):
-                    st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-bottom:4px;">รายการตรวจหลัก:</div>', unsafe_allow_html=True)
-                    for t in pkg_info["tests"]:
-                        st.markdown(f'<div style="font-size:0.7rem; color:#5B6B6B; padding-left:12px;">• {t}</div>', unsafe_allow_html=True)
-            
-                # Add-ons
-                if screenings:
-                    st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-top:10px; margin-bottom:4px; color:#7E22CE;">🔍 Add-on เฉพาะบุคคล:</div>', unsafe_allow_html=True)
-                    for sc in screenings:
-                        sp = SPECIAL_SCREENINGS.get(sc, {})
-                        st.markdown(f'<div style="font-size:0.7rem; color:#7E22CE; padding-left:12px;">+ {sc} (฿{sp.get("price", 0):,.0f})</div>', unsafe_allow_html=True)
-            
-                st.markdown(f"""
-                <div style="text-align:right; margin-top:12px; padding-top:8px; border-top:1px dashed #CBD5E1;">
-                    <span style="font-size:0.75rem; color:{MUTED};">รวมประเมินราคา: </span>
-                    <span style="font-size:1.2rem; font-weight:700; color:{TEAL};">฿ {total_price:,.0f}</span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-                st.markdown('<div class="action-btn" style="margin-top:14px;">', unsafe_allow_html=True)
-                if st.button("✨ Generate Personalized Proposal", use_container_width=True):
-                    with st.spinner("กำลังเชื่อมต่อระบบ CRM/LINE API..."):
-                        import time
-                        time.sleep(1)
-                        st.success("✅ ส่งข้อมูลให้ระบบเรียบร้อย! (Webhook API Mockup)")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-                # Export Button
-                export_text = f"--- Personalized Health Proposal ---\nPatient ID: {sel_pid}\nAge: {pt_data['age_at_visit']:.0f}\nHealth Score: {score}%\nRisk Level: {badge}\n\nRecommended Package: {pkg_name} (฿{pkg_info.get('price', 0):,.0f})\nDescription: {pkg_info.get('desc', '')}\n"
-                if screenings:
-                    export_text += f"\nAdd-on Screenings:\n"
-                    for sc in screenings:
-                        sp = SPECIAL_SCREENINGS.get(sc, {})
-                        export_text += f"- {sc} (฿{sp.get('price', 0):,.0f})\n"
-                export_text += f"\nTotal Estimated Price: ฿{total_price:,.0f}\n"
-            
-                st.download_button(
-                    label="📥 Export Summary (Text)",
-                    data=export_text.encode('utf-8'),
-                    file_name=f"proposal_{sel_pid}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            st.markdown('</div>', unsafe_allow_html=True) # ปิดกล่อง Card หลัก
-        else:
-            st.markdown(f"""
-            <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:12px; padding:30px 16px; text-align:center; color:{MUTED};">
-                <div style="font-size:2rem; margin-bottom:10px;">👈</div>
-                <div style="font-size:0.9rem; font-weight:600;">คลิกเลือกผู้ป่วยจากตารางด้านซ้าย</div>
-                <div style="font-size:0.8rem; margin-top:4px;">เพื่อดู Health Score และการแนะนำแพ็กเกจที่เหมาะสม</div>
-            </div>
-            """, unsafe_allow_html=True)
-    
+        render_patient_profile(avail_df, summary_pts, dv, sel_idx)
+
     st.divider()
-    
-    # ============================================================
+
     # Section 7 — Raw Data
-    # ============================================================
     with st.expander("📋 ดูข้อมูลดิบ (visits_cleaned)", expanded=False):
         show_c = [c for c in ["visit_date","visit_id","patient_id","gender","age_at_visit",
                                 "clinic_name","diagnosis_clean","disease_group",
@@ -1373,73 +1266,4 @@ if active_config.get("is_general"):
                       use_container_width=True, hide_index=True)
         st.caption(f"แสดง {len(dv):,} แถว")
 else:
-    # ---------------------------------------------
-    # Disease Specific Command Center
-    # ---------------------------------------------
-    disease_df = dv[active_config["filter_condition"](dv)].copy()
-    
-    st.markdown(f'<div class="header-title">{active_config["icon"]} {selected_tab_key} Command Center</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="header-sub">เป้าหมายการรักษา: {active_config["target_desc"]}</div><br>', unsafe_allow_html=True)
-    
-    # 1. Priority Summary (Executive Summary)
-    c1, c2, c3 = st.columns(3)
-    c1.metric(f"จำนวนผู้ป่วย (ตามตัวกรอง)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} คน")
-    p1_count = len(disease_df[disease_df["priority_status"] == "P1-Urgent"])
-    c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน", delta="-ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
-    
-    # 2. Contextual Search filtering
-    if search_term and "patient_id" in disease_df.columns:
-        disease_df = disease_df[disease_df["patient_id"].astype(str).str.contains(search_term, case=False)]
-        
-    # 3. Dynamic Priority Table
-    st.markdown("### 🚨 รายชื่อผู้ป่วย (Priority List)")
-    if not disease_df.empty:
-        sort_df = disease_df.sort_values(by=["priority_status"], ascending=True).copy()
-        
-        show_cols = ["patient_id", "visit_date", "days_since_last_visit", "priority_status", "systolic", "bmi"]
-        show_cols = [c for c in show_cols if c in sort_df.columns]
-        
-        def highlight_priority(row):
-            if row.get("priority_status") == "P1-Urgent": return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
-            if row.get("priority_status") == "P2-Warning": return ["background-color:#FEF0C7; color:#B54708"] * len(row)
-            return [""] * len(row)
-            
-        selection = st.dataframe(
-            sort_df[show_cols].style.apply(highlight_priority, axis=1), 
-            use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key=f"table_{selected_tab_key}"
-        )
-        
-        # 4. Action Oriented (Combined Care Package)
-        sel_idx = selection.selection.rows
-        if sel_idx:
-            sel_pid = sort_df.iloc[sel_idx[0]]["patient_id"]
-            st.markdown(f"### 💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}")
-            
-            # Analyze all diseases for this patient
-            pt_all_visits = df[df["patient_id"] == sel_pid]
-            pt_diseases = pt_all_visits["disease_group"].unique()
-            
-            combined_tests = []
-            risk_multiplier = 1.0
-            found_diseases = []
-            
-            for k, v in DISEASE_CONFIG.items():
-                if v.get("is_general"): continue
-                if any(v["filter_condition"](pt_all_visits)):
-                    combined_tests.extend(v["Key_Tests"])
-                    risk_multiplier += 0.2
-                    found_diseases.append(k)
-                    
-            combined_tests = list(set(combined_tests)) # Unique
-            
-            st.info(f"**พหุโรค (Multi-morbidity):** พบ {len(found_diseases)} โรคเรื้อรังซ้อนทับ ได้แก่ {', '.join(found_diseases)} (Risk Multiplier: {risk_multiplier:.1f}x)")
-            
-            if st.button(f"✨ Generate {selected_tab_key} Care Package", key="btn_combo_pkg"):
-                st.success(f"✅ **สร้าง {selected_tab_key} Package สำเร็จ!**")
-                price = len(combined_tests) * 500 + 1500
-                st.markdown(f"**ราคาประเมินรวม:** ฿ {price:,.0f}")
-                st.markdown("**รายการตรวจที่สำคัญที่สุด (Merging Tests from Multi-morbidity):**")
-                for t in combined_tests:
-                    st.markdown(f"- {t}")
-    else:
-        st.info("ไม่พบคนไข้ในกลุ่มนี้")
+    render_disease_center(dv, df, selected_tab_key, active_config, search_term)
