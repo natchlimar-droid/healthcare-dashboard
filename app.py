@@ -6,6 +6,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import time
+import zipfile
+import io
 
 # optional dependencies
 try:
@@ -167,49 +169,117 @@ div[data-testid="stMetricLabel"] {{
 </style>
 """, unsafe_allow_html=True)
 
+# ============================================================
+# Data loading — รองรับ CSV และ ZIP
+# ============================================================
 
-# ============================================================
-# Data loading — รองรับ visits_cleaned.csv หรือ visits_cleaned.zip
-# ============================================================
+def read_csv_or_zip(file_path, preferred_csv_names=None):
+    """
+    อ่านไฟล์ CSV ปกติ หรือ ZIP ที่มี CSV อยู่ข้างใน
+
+    preferred_csv_names:
+    รายชื่อไฟล์ CSV ที่อยากเลือกก่อน หาก ZIP มีหลาย CSV
+    """
+
+    # -----------------------------
+    # กรณีเป็น CSV ปกติ
+    # -----------------------------
+    if file_path.lower().endswith(".csv"):
+        return pd.read_csv(
+            file_path,
+            encoding="utf-8-sig",
+            low_memory=False
+        )
+
+    # -----------------------------
+    # กรณีเป็น ZIP
+    # -----------------------------
+    if file_path.lower().endswith(".zip"):
+        with zipfile.ZipFile(file_path, "r") as z:
+            csv_files = [
+                name for name in z.namelist()
+                if name.lower().endswith(".csv")
+                and not name.startswith("__MACOSX/")
+            ]
+
+            if not csv_files:
+                raise ValueError(
+                    f"ไม่พบไฟล์ CSV ภายใน ZIP: {file_path}"
+                )
+
+            # เลือกไฟล์ตามชื่อที่ต้องการก่อน
+            selected_file = None
+
+            if preferred_csv_names:
+                preferred_lower = {
+                    name.lower() for name in preferred_csv_names
+                }
+
+                for csv_name in csv_files:
+                    base_name = os.path.basename(csv_name).lower()
+
+                    if base_name in preferred_lower:
+                        selected_file = csv_name
+                        break
+
+            # ถ้าไม่เจอชื่อที่ต้องการ ใช้ CSV ตัวแรกใน ZIP
+            if selected_file is None:
+                selected_file = csv_files[0]
+
+            with z.open(selected_file) as csv_file:
+                return pd.read_csv(
+                    csv_file,
+                    encoding="utf-8-sig",
+                    low_memory=False
+                )
+
+    raise ValueError(f"ไม่รองรับประเภทไฟล์: {file_path}")
+
+
+def find_data_file(file_candidates):
+    """
+    หาไฟล์ตัวแรกที่มีอยู่จริงจากรายชื่อที่กำหนด
+    """
+    for file_name in file_candidates:
+        if os.path.exists(file_name):
+            return file_name
+
+    return None
+
+
 @st.cache_data
 def load_data():
-    """
-    รองรับ:
-    - visits_cleaned.csv
-    - visits_cleaned.zip
-
-    ZIP ต้องมีไฟล์ CSV อยู่ภายในเพียง 1 ไฟล์
-    เช่น visits_cleaned.zip -> visits_cleaned.csv
-    """
-
     # --------------------------------------------------------
-    # 1) หาไฟล์ข้อมูลหลัก
+    # 1) ไฟล์ข้อมูลหลัก
+    # รองรับทั้ง visits_cleaned และ visits_with_monthly_count
     # --------------------------------------------------------
-    if os.path.exists("visits_cleaned.csv"):
-        main_file = "visits_cleaned.csv"
-    elif os.path.exists("visits_cleaned.zip"):
-        main_file = "visits_cleaned.zip"
-    else:
+    main_file = find_data_file([
+        "visits_cleaned.csv",
+        "visits_cleaned.zip",
+        "visits_with_monthly_count.csv",
+        "visits_with_monthly_count.zip",
+    ])
+
+    if main_file is None:
         return None, None, False, False
 
-    # --------------------------------------------------------
-    # 2) อ่านข้อมูลหลัก
-    # --------------------------------------------------------
     try:
-        df = pd.read_csv(
+        df = read_csv_or_zip(
             main_file,
-            encoding="utf-8-sig",
-            low_memory=False,
-            compression="infer"
+            preferred_csv_names=[
+                "visits_cleaned.csv",
+                "visits_with_monthly_count.csv"
+            ]
         )
     except Exception as e:
-        st.error(f"⚠️ อ่านไฟล์ข้อมูลไม่สำเร็จ: {e}")
+        st.error(f"⚠️ อ่านไฟล์ข้อมูลหลักไม่สำเร็จ: {e}")
         return None, None, False, False
 
-    df.columns = df.columns.str.strip()
+    # ทำความสะอาดชื่อคอลัมน์
+    df.columns = df.columns.astype(str).str.strip()
 
     # --------------------------------------------------------
-    # 3) วันที่
+    # 2) วันที่
     # --------------------------------------------------------
     has_date = False
 
@@ -227,7 +297,6 @@ def load_data():
         has_date = bool(valid_date.any())
         df.loc[~valid_date, "visit_date"] = pd.NaT
     else:
-        # ป้องกัน Error หากไฟล์ไม่มีคอลัมน์ visit_date
         df["visit_date"] = pd.NaT
 
     if has_date:
@@ -238,27 +307,29 @@ def load_data():
         df["visit_day"] = pd.NaT
 
     # --------------------------------------------------------
-    # 4) แปลงข้อมูลตัวเลข
+    # 3) แปลงข้อมูลตัวเลข
     # --------------------------------------------------------
-    for col in ["age_at_visit", "height_cm", "weight_kg", "bmi"]:
+    for col in [
+        "age_at_visit",
+        "height_cm",
+        "weight_kg",
+        "bmi",
+        "systolic_bp",
+        "diastolic_bp"
+    ]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # --------------------------------------------------------
-    # 5) ความดันโลหิต
+    # 4) ความดันโลหิต
     # --------------------------------------------------------
-    for col in ["systolic_bp", "diastolic_bp"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    # สร้างคอลัมน์ไว้ก่อน ป้องกัน KeyError
     if "systolic_bp" not in df.columns:
         df["systolic_bp"] = np.nan
 
     if "diastolic_bp" not in df.columns:
         df["diastolic_bp"] = np.nan
 
-    # ใช้ bp_raw เป็น fallback หาก systolic_bp ไม่มีข้อมูล
+    # อ่าน bp_raw หากไม่มี systolic_bp ที่ใช้ได้
     if "bp_raw" in df.columns and df["systolic_bp"].isna().all():
         bp_clean = (
             df["bp_raw"]
@@ -273,7 +344,6 @@ def load_data():
         sys_bp = pd.to_numeric(bp_split[0], errors="coerce")
         dia_bp = pd.to_numeric(bp_split[1], errors="coerce")
 
-        # ตัดค่าความดันที่ผิดช่วง
         sys_bp[~sys_bp.between(60, 250)] = np.nan
         dia_bp[~dia_bp.between(30, 150)] = np.nan
 
@@ -289,12 +359,12 @@ def load_data():
     )
 
     # --------------------------------------------------------
-    # 6) เพศ
+    # 5) เพศ
     # --------------------------------------------------------
-    if "gender" in df.columns:
-        df["gender"] = df["gender"].fillna("ไม่ระบุ")
-    else:
+    if "gender" not in df.columns:
         df["gender"] = "ไม่ระบุ"
+    else:
+        df["gender"] = df["gender"].fillna("ไม่ระบุ")
 
     df["gender_code"] = (
         df["gender"]
@@ -303,21 +373,21 @@ def load_data():
     )
 
     # --------------------------------------------------------
-    # 7) BMI
+    # 6) BMI
     # --------------------------------------------------------
-    if "bmi" in df.columns:
-        df["bmi_imputed"] = df["bmi"].isna()
-        med_bmi = df["bmi"].median()
-
-        df["bmi"] = df["bmi"].fillna(
-            med_bmi if pd.notna(med_bmi) else 22.0
-        )
-    else:
-        df["bmi_imputed"] = True
+    if "bmi" not in df.columns:
         df["bmi"] = 22.0
+        df["bmi_imputed"] = True
+    else:
+        df["bmi_imputed"] = df["bmi"].isna()
+
+        median_bmi = df["bmi"].median()
+        df["bmi"] = df["bmi"].fillna(
+            median_bmi if pd.notna(median_bmi) else 22.0
+        )
 
     # --------------------------------------------------------
-    # 8) อายุ
+    # 7) อายุ
     # --------------------------------------------------------
     has_age = (
         "age_at_visit" in df.columns
@@ -325,10 +395,10 @@ def load_data():
     )
 
     if has_age:
-        med_age = df["age_at_visit"].median()
+        median_age = df["age_at_visit"].median()
 
         df["age_at_visit"] = df["age_at_visit"].fillna(
-            med_age if pd.notna(med_age) else 35.0
+            median_age if pd.notna(median_age) else 35.0
         )
 
         df["is_adult"] = df["age_at_visit"] >= 18
@@ -336,7 +406,13 @@ def load_data():
         df["age_group"] = pd.cut(
             df["age_at_visit"],
             bins=[0, 29, 39, 49, 59, 120],
-            labels=["<30 ปี", "30-40 ปี", "40-50 ปี", "50-60 ปี", ">60 ปี"]
+            labels=[
+                "<30 ปี",
+                "30-40 ปี",
+                "40-50 ปี",
+                "50-60 ปี",
+                ">60 ปี"
+            ]
         ).astype(str).replace("nan", "ไม่ระบุ")
 
         df["pyramid_group"] = pd.cut(
@@ -344,10 +420,18 @@ def load_data():
             bins=[0, 10, 20, 30, 40, 50, 60, 70, 80, 120],
             right=False,
             labels=[
-                "0-9", "10-19", "20-29", "30-39", "40-49",
-                "50-59", "60-69", "70-79", "80+"
+                "0-9",
+                "10-19",
+                "20-29",
+                "30-39",
+                "40-49",
+                "50-59",
+                "60-69",
+                "70-79",
+                "80+"
             ]
         ).astype(str)
+
     else:
         df["age_at_visit"] = 35.0
         df["is_adult"] = True
@@ -355,7 +439,7 @@ def load_data():
         df["pyramid_group"] = "ไม่ระบุ"
 
     # --------------------------------------------------------
-    # 9) ระดับความดันและกลุ่มเสี่ยง
+    # 8) ระดับความดัน / กลุ่มเสี่ยง
     # --------------------------------------------------------
     bp_cat = pd.cut(
         df["systolic"],
@@ -377,20 +461,20 @@ def load_data():
     ).astype(int)
 
     # --------------------------------------------------------
-    # 10) วินิจฉัย / กลุ่มโรค / คลินิก
+    # 9) Diagnosis / clinic / disease
     # --------------------------------------------------------
     def clean_diagnosis(value):
         if pd.isna(value):
             return "ไม่ระบุ"
 
         value = str(value).strip()
-        return "ไม่ระบุ" if value in (":", "", "-") else value
+        return "ไม่ระบุ" if value in ("", "-", ":") else value
 
-    if "diagnosis_text" in df.columns:
-        df["diagnosis_clean"] = df["diagnosis_text"].apply(clean_diagnosis)
-    else:
+    if "diagnosis_text" not in df.columns:
         df["diagnosis_text"] = ""
         df["diagnosis_clean"] = "ไม่ระบุ"
+    else:
+        df["diagnosis_clean"] = df["diagnosis_text"].apply(clean_diagnosis)
 
     if "disease_group" not in df.columns:
         df["disease_group"] = "ทั่วไป"
@@ -399,32 +483,31 @@ def load_data():
         df["clinic_name"] = "ไม่ระบุ"
 
     # --------------------------------------------------------
-    # 11) Monthly summary (ไม่บังคับ)
+    # 10) Monthly summary — ไม่บังคับ
     # --------------------------------------------------------
     monthly = None
 
-    try:
-        if os.path.exists("monthly_visit_summary.csv"):
-            monthly_file = "monthly_visit_summary.csv"
-        elif os.path.exists("monthly_visit_summary.zip"):
-            monthly_file = "monthly_visit_summary.zip"
-        else:
-            monthly_file = None
+    monthly_file = find_data_file([
+        "monthly_visit_summary.csv",
+        "monthly_visit_summary.zip"
+    ])
 
-        if monthly_file:
-            monthly = pd.read_csv(
+    if monthly_file:
+        try:
+            monthly = read_csv_or_zip(
                 monthly_file,
-                encoding="utf-8-sig",
-                compression="infer"
+                preferred_csv_names=["monthly_visit_summary.csv"]
             )
+
+            monthly.columns = monthly.columns.astype(str).str.strip()
 
             if "visit_count" in monthly.columns:
                 monthly["visit_count"] = pd.to_numeric(
                     monthly["visit_count"],
                     errors="coerce"
                 )
-    except Exception:
-        monthly = None
+        except Exception:
+            monthly = None
 
     return df, monthly, has_date, has_age
 
@@ -434,11 +517,12 @@ df, monthly_df, has_date, has_age = load_data()
 
 if df is None:
     st.error(
-        "⚠️ ไม่พบไฟล์ `visits_cleaned.csv` หรือ `visits_cleaned.zip` "
-        "กรุณาตรวจสอบว่าไฟล์อยู่ในโฟลเดอร์เดียวกับ `app.py`"
+        "⚠️ ไม่พบไฟล์ข้อมูล กรุณาอัปโหลดไฟล์ใดไฟล์หนึ่งต่อไปนี้: "
+        "`visits_cleaned.csv`, `visits_cleaned.zip`, "
+        "`visits_with_monthly_count.csv` หรือ "
+        "`visits_with_monthly_count.zip`"
     )
     st.stop()
-    # ============================================================
 # Process patient data
 # ============================================================
 def process_patient_data(dataframe):
