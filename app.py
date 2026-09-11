@@ -68,7 +68,7 @@ HEALTH_PACKAGES = {
 
 
 DISEASE_CONFIG = {
-    "🏥 General Dashboard (หน้าแรก)": {
+    "General Dashboard (หน้าแรก)": {
         "icon": "🏥",
         "is_general": True
     },
@@ -378,28 +378,35 @@ st.markdown('''
 /* Style the radio buttons to look like tabs */
 div.stRadio > div[role='radiogroup'] {
     flex-direction: row;
-    gap: 2px;
-    border-bottom: 2px solid #0E5C56; /* Teal line under tabs */
-    margin-bottom: 20px;
+    gap: 4px;
+    border-bottom: 2px solid #0E5C56;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
 }
 div.stRadio > div[role='radiogroup'] > label {
-    background-color: #f1f5f9;
-    border-radius: 8px 8px 0 0;
-    padding: 10px 20px;
+    background-color: #EEF2F1;
+    border-radius: 10px 10px 0 0;
+    padding: 9px 18px;
     margin-bottom: 0px;
     cursor: pointer;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #DCE3E0;
     border-bottom: none;
-    transition: all 0.3s ease;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 div.stRadio > div[role='radiogroup'] > label[data-checked="true"] {
     background-color: #0E5C56 !important;
     color: white !important;
+    font-weight: 600;
     border-color: #0E5C56;
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 -3px 8px rgba(14,92,86,0.18);
 }
 div.stRadio > div[role='radiogroup'] > label:hover {
-    background-color: #e2e8f0;
+    background-color: #E2E8E6;
+}
+div.stRadio > div[role='radiogroup'] > label[data-checked="true"]:hover {
+    background-color: #0E5C56 !important;
 }
 </style>
 ''', unsafe_allow_html=True)
@@ -408,6 +415,20 @@ tab_options = [f"{v['icon']} {k}" for k, v in DISEASE_CONFIG.items()]
 selected_tab_str = st.radio(" ", tab_options, horizontal=True, label_visibility="collapsed")
 selected_tab_key = selected_tab_str.split(" ", 1)[1]
 active_config = DISEASE_CONFIG[selected_tab_key]
+
+
+def render_page_header(icon, title, subtitle, chip_text=None):
+    """Header เดียวกันทุกแท็บ — ไม่ให้หน้าตาเปลี่ยนไปมาเวลาสลับแท็บ (ความรู้สึก 'โปร' อย่างหนึ่งคือ shell คงที่)"""
+    chip_html = f'<span class="asof-chip">{chip_text}</span>' if chip_text else ""
+    st.markdown(f"""
+    <div class="header-bar">
+      <div>
+        <div class="header-title">{icon} {title}</div>
+        <div class="header-sub">{subtitle}</div>
+      </div>
+      {chip_html}
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ============================================================
@@ -438,22 +459,22 @@ with st.sidebar:
     if has_date:
         valid_dates = df["visit_date"].dropna()
         if not valid_dates.empty:
-            import datetime
             d_min, d_max = valid_dates.min().date(), valid_dates.max().date()
-            cal_min = min(d_min, datetime.date(2026, 5, 1))
-            cal_max = max(d_max, datetime.date(2026, 6, 30))
-            date_filter = st.date_input("ช่วงวันที่", (d_min, d_max), min_value=cal_min, max_value=cal_max)
+            date_filter = st.date_input("ช่วงวันที่", (d_min, d_max), min_value=d_min, max_value=d_max)
         else:
             date_filter = None
     else:
         date_filter = None
 
 # Apply filters
+# หมายเหตุ: ถ้าผู้ใช้เคลียร์ multiselect จนว่างเปล่า ต้อง "ไม่แสดงอะไรเลย" ตามที่ผู้ใช้เลือกจริง
+# (ไม่ใช้ `disease_sel or all_diseases` เพราะ list ว่างเป็น falsy — จะ silently แสดงข้อมูลทั้งหมด
+# ทั้งที่ผู้ใช้ตั้งใจเคลียร์ตัวกรอง ซึ่งขัดใจและไม่ตรงกับที่เห็นในตัวกรอง — ปล่อยให้ dv.empty ด้านล่างจัดการแทน)
 mask = (
-    df["disease_group"].isin(disease_sel  or all_diseases) &
-    df["gender"].isin(gender_sel          or all_genders) &
-    df["year_month"].isin(month_sel       or all_months) &
-    df["clinic_name"].isin(clinic_sel     or all_clinics)
+    df["disease_group"].isin(disease_sel) &
+    df["gender"].isin(gender_sel) &
+    df["year_month"].isin(month_sel) &
+    df["clinic_name"].isin(clinic_sel)
 )
 if date_filter and isinstance(date_filter, (list,tuple)) and len(date_filter) == 2:
     mask &= df["visit_date"].between(pd.Timestamp(date_filter[0]), pd.Timestamp(date_filter[1])) | df["visit_date"].isna()
@@ -466,7 +487,7 @@ if dv.empty:
 # Period-over-Period
 delta_v = delta_p = delta_r = compare_label = None
 if has_date and date_filter and isinstance(date_filter,(list,tuple)) and len(date_filter)==2:
-    base = df["disease_group"].isin(disease_sel or all_diseases) & df["gender"].isin(gender_sel or all_genders)
+    base = df["disease_group"].isin(disease_sel) & df["gender"].isin(gender_sel)
     cur_s, cur_e = pd.Timestamp(date_filter[0]), pd.Timestamp(date_filter[1])
     span = cur_e - cur_s
     prev_e, prev_s = cur_s - pd.Timedelta(days=1), cur_s - span - pd.Timedelta(days=1)
@@ -490,16 +511,12 @@ if has_date and date_filter and isinstance(date_filter,(list,tuple)) and len(dat
 if active_config.get("is_general"):
     as_of     = df["visit_date"].max()
     as_of_str = as_of.strftime("%d %b %Y") if pd.notna(as_of) else "ไม่ระบุ"
-    
-    st.markdown(f"""
-    <div class="header-bar">
-      <div>
-        <div class="header-title">🏥 Clinical Command Center</div>
-        <div class="header-sub">ภาพรวมตัวชี้วัดสุขภาพ · การจัดการกลุ่มเสี่ยง · โอกาสขยายผลแพ็กเกจตรวจสุขภาพเชิงป้องกัน</div>
-      </div>
-      <span class="asof-chip">ข้อมูลล่าสุด {as_of_str} · {df['clinic_name'].nunique()} คลินิก</span>
-    </div>
-    """, unsafe_allow_html=True)
+
+    render_page_header(
+        "🏥", "Clinical Command Center",
+        "ภาพรวมตัวชี้วัดสุขภาพ · การจัดการกลุ่มเสี่ยง · โอกาสขยายผลแพ็กเกจตรวจสุขภาพเชิงป้องกัน",
+        chip_text=f"ข้อมูลล่าสุด {as_of_str} · {df['clinic_name'].nunique()} คลินิก"
+    )
     
     
     # ============================================================
@@ -779,35 +796,35 @@ if active_config.get("is_general"):
     # ============================================================
     
     def recommend_package(row):
-        """ประเมินแพ็กเกจจากช่วงอายุและเพศ รวมถึงการคัดกรองพิเศษ"""
+        """ประเมินแพ็กเกจจากช่วงอายุและเพศ รวมถึงการคัดกรองพิเศษ
+        ราคาดึงจาก HEALTH_PACKAGES / SPECIAL_SCREENINGS เสมอ (single source of truth)
+        เพื่อไม่ให้ตัวเลขในนี้เพี้ยนไปจากที่แสดงในแท็บ 'แผนการตรวจที่แนะนำ'"""
         age = row.get("age_at_visit", 35)
         gender_code = row.get("gender_code", 0.5)
-    
+
         # 1. Base Package
         if age >= 50:
             pkg_name = "Longevity Package"
-            base_price = 8000
         elif age >= 30:
             pkg_name = "Advanced Package"
-            base_price = 5500
         else:
             pkg_name = "Essential Package"
-            base_price = 3000
-        
+        base_price = HEALTH_PACKAGES[pkg_name]["price"]
+
         # 2. Special Screening
         screenings = []
         add_on_price = 0
-    
+
         # หญิง (gender_code=1) อายุ >= 40 แนะนำ Mammogram
         if gender_code > 0.5 and age >= 40:
             screenings.append("Mammogram")
-            add_on_price += 2000
-        
+            add_on_price += SPECIAL_SCREENINGS["Mammogram"]["price"]
+
         # ชาย (gender_code=0) อายุ >= 50 แนะนำ PSA
         if gender_code < 0.5 and age >= 50:
             screenings.append("PSA (มะเร็งต่อมลูกหมาก)")
-            add_on_price += 2000
-        
+            add_on_price += SPECIAL_SCREENINGS["PSA (มะเร็งต่อมลูกหมาก)"]["price"]
+
         return pkg_name, base_price, screenings, add_on_price
     
     
@@ -909,10 +926,15 @@ if active_config.get("is_general"):
                                       legend=dict(orientation="v", yanchor="middle", y=0.5, x=1.0))
                 st.plotly_chart(fig_don, use_container_width=True)
             
-                # Text summary
+                # Text summary — ราคาดึงจาก HEALTH_PACKAGES เสมอ (ดู recommend_package ด้านล่าง)
+                _pipeline_value = (
+                    pkg_counts[pkg_counts["Package"]=="Longevity (>50)"]["Count"].sum() * HEALTH_PACKAGES["Longevity Package"]["price"]
+                    + pkg_counts[pkg_counts["Package"]=="Advanced (30-50)"]["Count"].sum() * HEALTH_PACKAGES["Advanced Package"]["price"]
+                    + pkg_counts[pkg_counts["Package"]=="Essential (<30)"]["Count"].sum() * HEALTH_PACKAGES["Essential Package"]["price"]
+                )
                 st.markdown(f"""
                 <div style="text-align:center; font-size:0.8rem; color:{MUTED}; margin-top:-10px;">
-                    มูลค่าคาดการณ์ (Base): <span style="color:{TEAL}; font-weight:700;">฿ {(pkg_counts[pkg_counts["Package"]=="Longevity (>50)"]["Count"].sum() * 8000 + pkg_counts[pkg_counts["Package"]=="Advanced (30-50)"]["Count"].sum() * 5500 + pkg_counts[pkg_counts["Package"]=="Essential (<30)"]["Count"].sum() * 3000):,.0f}</span>
+                    มูลค่าคาดการณ์ (Base): <span style="color:{TEAL}; font-weight:700;">฿ {_pipeline_value:,.0f}</span>
                 </div>
                 """, unsafe_allow_html=True)
             else:
@@ -968,125 +990,124 @@ if active_config.get("is_general"):
     
     with col_right:
         st.markdown('<div class="panel-title">📋 Patient Profile & Recommendation</div>', unsafe_allow_html=True)
-    
+
         if sel_idx and avail_df is not None:
             sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
             pt_data = summary_pts.loc[sel_pid]
-        
+
             score, reasons_html, pkg_name, total_price, screenings = analyze_patient_risk(pt_data)
             gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
-        
+
             if score <= 60: c_tx, badge = "#B3261E", "🚨 High Risk"
             elif score <= 80: c_tx, badge = "#B54708", "⚠️ Medium Risk"
             else: c_tx, badge = "#065F46", "🌱 Low Risk"
-            
-            st.markdown(f"""
-            <div style="background:{SURFACE}; border:1px solid #E2E8F0; border-radius:12px; padding:18px; margin-top:8px; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
-                <div style="display:flex; align-items:center; gap:14px;">
-                    <div style="font-size:2.4rem; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:50%; width:54px; height:54px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
-                    <div>
-                        <div style="font-weight:700; color:{INK}; font-size:1.15rem;">{sel_pid}</div>
-                        <div style="font-size:0.75rem; color:{MUTED}; margin-bottom:2px;">อายุ: {pt_data['age_at_visit']:.0f} ปี</div>
-                        <div style="font-size:0.75rem; font-weight:600; color:{c_tx}; background:#F8FAFC; padding:2px 6px; border-radius:6px; display:inline-block;">{badge}</div>
+
+            with st.container(key="card_profile"):
+                st.markdown(f"""
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+                    <div style="display:flex; align-items:center; gap:14px;">
+                        <div style="font-size:2.4rem; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:50%; width:54px; height:54px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{gender_icon}</div>
+                        <div>
+                            <div style="font-weight:700; color:{INK}; font-size:1.15rem;">{sel_pid}</div>
+                            <div style="font-size:0.75rem; color:{MUTED}; margin-bottom:2px;">อายุ: {pt_data['age_at_visit']:.0f} ปี</div>
+                            <div style="font-size:0.75rem; font-weight:600; color:{c_tx}; background:#F8FAFC; padding:2px 6px; border-radius:6px; display:inline-block;">{badge}</div>
+                        </div>
                     </div>
                 </div>
-              </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
         
-            tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
+                tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
         
-            with tab1:
-                st.markdown(f"""
-                <div style="text-align:center; margin-bottom:16px;">
-                    <div style="font-size:0.75rem; color:{MUTED}; font-weight:600;">Health Score</div>
-                    <div style="font-size:2.5rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.1;">{score}%</div>
-                </div>
-                <div style="font-size:0.78rem; font-weight:600; color:{INK}; margin-bottom:8px;">💡 AI Analysis Insights:</div>
-                <div style="margin-bottom:12px; line-height:1.6;">
-                    {reasons_html}
-                </div>
-                """, unsafe_allow_html=True)
+                with tab1:
+                    st.markdown(f"""
+                    <div style="text-align:center; margin-bottom:16px;">
+                        <div style="font-size:0.75rem; color:{MUTED}; font-weight:600;">Health Score</div>
+                        <div style="font-size:2.5rem; font-weight:700; color:{c_tx}; font-family:'IBM Plex Mono',monospace; line-height:1.1;">{score}%</div>
+                    </div>
+                    <div style="font-size:0.78rem; font-weight:600; color:{INK}; margin-bottom:8px;">💡 AI Analysis Insights:</div>
+                    <div style="margin-bottom:12px; line-height:1.6;">
+                        {reasons_html}
+                    </div>
+                    """, unsafe_allow_html=True)
             
-            with tab2:
-                # ดึงข้อมูลประวัติการวินิจฉัย
-                hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
-                if not hist_df.empty:
-                    st.markdown('<div style="font-size:0.75rem; color:#5B6B6B; margin-bottom:8px;">Timeline การมารับบริการ</div>', unsafe_allow_html=True)
-                    disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
-                    disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
-                    disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
+                with tab2:
+                    # ดึงข้อมูลประวัติการวินิจฉัย
+                    hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
+                    if not hist_df.empty:
+                        st.markdown('<div style="font-size:0.75rem; color:#5B6B6B; margin-bottom:8px;">Timeline การมารับบริการ</div>', unsafe_allow_html=True)
+                        disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
+                        disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
+                        disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
                 
-                    # Conditional Formatting 
-                    def highlight_risk(row):
-                        if row["Risk"] == 1: return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
-                        if pd.notna(row["Sys"]) and row["Sys"] >= 140: return ["background-color:#F8C6C0"] * len(row)
-                        if pd.notna(row["BMI"]) and row["BMI"] >= 25: return ["background-color:#FEF0C7"] * len(row)
-                        return [""] * len(row)
+                        # Conditional Formatting 
+                        def highlight_risk(row):
+                            if row["Risk"] == 1: return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+                            if pd.notna(row["Sys"]) and row["Sys"] >= 140: return ["background-color:#F8C6C0"] * len(row)
+                            if pd.notna(row["BMI"]) and row["BMI"] >= 25: return ["background-color:#FEF0C7"] * len(row)
+                            return [""] * len(row)
                 
-                    st.dataframe(disp_hist.style.apply(highlight_risk, axis=1), 
-                                 use_container_width=True, hide_index=True, height=220,
-                                 column_config={"Risk": None})
-                else:
-                    st.info("ไม่พบประวัติการรับบริการในระบบ")
+                        st.dataframe(disp_hist.style.apply(highlight_risk, axis=1), 
+                                     use_container_width=True, hide_index=True, height=220,
+                                     column_config={"Risk": None})
+                    else:
+                        st.info("ไม่พบประวัติการรับบริการในระบบ")
                 
-            with tab3:
-                pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
-                st.markdown(f"""
-                <div style="background:#F0F9FF; border-left:4px solid #0284C7; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
-                    <div style="font-size:0.7rem; color:#0284C7; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Package หลัก</div>
-                    <div style="font-size:1.05rem; font-weight:700; color:{INK};">{pkg_name}</div>
-                    <div style="font-size:0.7rem; color:{MUTED}; margin-bottom:4px;">{pkg_info.get("desc", "")}</div>
-                    <div style="font-size:0.85rem; font-weight:600; color:{MUTED}; font-family:'IBM Plex Mono',monospace;">฿ {pkg_info.get("price", 0):,.0f}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                with tab3:
+                    pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
+                    st.markdown(f"""
+                    <div style="background:#F0F9FF; border-left:4px solid #0284C7; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+                        <div style="font-size:0.7rem; color:#0284C7; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Package หลัก</div>
+                        <div style="font-size:1.05rem; font-weight:700; color:{INK};">{pkg_name}</div>
+                        <div style="font-size:0.7rem; color:{MUTED}; margin-bottom:4px;">{pkg_info.get("desc", "")}</div>
+                        <div style="font-size:0.85rem; font-weight:600; color:{MUTED}; font-family:'IBM Plex Mono',monospace;">฿ {pkg_info.get("price", 0):,.0f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
             
-                # Show Tests
-                if pkg_info.get("tests"):
-                    st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-bottom:4px;">รายการตรวจหลัก:</div>', unsafe_allow_html=True)
-                    for t in pkg_info["tests"]:
-                        st.markdown(f'<div style="font-size:0.7rem; color:#5B6B6B; padding-left:12px;">• {t}</div>', unsafe_allow_html=True)
+                    # Show Tests
+                    if pkg_info.get("tests"):
+                        st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-bottom:4px;">รายการตรวจหลัก:</div>', unsafe_allow_html=True)
+                        for t in pkg_info["tests"]:
+                            st.markdown(f'<div style="font-size:0.7rem; color:#5B6B6B; padding-left:12px;">• {t}</div>', unsafe_allow_html=True)
             
-                # Add-ons
-                if screenings:
-                    st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-top:10px; margin-bottom:4px; color:#7E22CE;">🔍 Add-on เฉพาะบุคคล:</div>', unsafe_allow_html=True)
-                    for sc in screenings:
-                        sp = SPECIAL_SCREENINGS.get(sc, {})
-                        st.markdown(f'<div style="font-size:0.7rem; color:#7E22CE; padding-left:12px;">+ {sc} (฿{sp.get("price", 0):,.0f})</div>', unsafe_allow_html=True)
+                    # Add-ons
+                    if screenings:
+                        st.markdown('<div style="font-size:0.75rem; font-weight:600; margin-top:10px; margin-bottom:4px; color:#7E22CE;">🔍 Add-on เฉพาะบุคคล:</div>', unsafe_allow_html=True)
+                        for sc in screenings:
+                            sp = SPECIAL_SCREENINGS.get(sc, {})
+                            st.markdown(f'<div style="font-size:0.7rem; color:#7E22CE; padding-left:12px;">+ {sc} (฿{sp.get("price", 0):,.0f})</div>', unsafe_allow_html=True)
             
-                st.markdown(f"""
-                <div style="text-align:right; margin-top:12px; padding-top:8px; border-top:1px dashed #CBD5E1;">
-                    <span style="font-size:0.75rem; color:{MUTED};">รวมประเมินราคา: </span>
-                    <span style="font-size:1.2rem; font-weight:700; color:{TEAL};">฿ {total_price:,.0f}</span>
-                </div>
-                """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div style="text-align:right; margin-top:12px; padding-top:8px; border-top:1px dashed #CBD5E1;">
+                        <span style="font-size:0.75rem; color:{MUTED};">รวมประเมินราคา: </span>
+                        <span style="font-size:1.2rem; font-weight:700; color:{TEAL};">฿ {total_price:,.0f}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
             
-                st.markdown('<div class="action-btn" style="margin-top:14px;">', unsafe_allow_html=True)
-                if st.button("✨ Generate Personalized Proposal", use_container_width=True):
-                    with st.spinner("กำลังเชื่อมต่อระบบ CRM/LINE API..."):
-                        import time
-                        time.sleep(1)
-                        st.success("✅ ส่งข้อมูลให้ระบบเรียบร้อย! (Webhook API Mockup)")
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="action-btn" style="margin-top:14px;">', unsafe_allow_html=True)
+                    if st.button("✨ Generate Personalized Proposal", use_container_width=True):
+                        with st.spinner("กำลังเชื่อมต่อระบบ CRM/LINE API..."):
+                            import time
+                            time.sleep(1)
+                            st.success("✅ ส่งข้อมูลให้ระบบเรียบร้อย! (Webhook API Mockup)")
+                    st.markdown('</div>', unsafe_allow_html=True)
             
-                # Export Button
-                export_text = f"--- Personalized Health Proposal ---\nPatient ID: {sel_pid}\nAge: {pt_data['age_at_visit']:.0f}\nHealth Score: {score}%\nRisk Level: {badge}\n\nRecommended Package: {pkg_name} (฿{pkg_info.get('price', 0):,.0f})\nDescription: {pkg_info.get('desc', '')}\n"
-                if screenings:
-                    export_text += f"\nAdd-on Screenings:\n"
-                    for sc in screenings:
-                        sp = SPECIAL_SCREENINGS.get(sc, {})
-                        export_text += f"- {sc} (฿{sp.get('price', 0):,.0f})\n"
-                export_text += f"\nTotal Estimated Price: ฿{total_price:,.0f}\n"
+                    # Export Button
+                    export_text = f"--- Personalized Health Proposal ---\nPatient ID: {sel_pid}\nAge: {pt_data['age_at_visit']:.0f}\nHealth Score: {score}%\nRisk Level: {badge}\n\nRecommended Package: {pkg_name} (฿{pkg_info.get('price', 0):,.0f})\nDescription: {pkg_info.get('desc', '')}\n"
+                    if screenings:
+                        export_text += f"\nAdd-on Screenings:\n"
+                        for sc in screenings:
+                            sp = SPECIAL_SCREENINGS.get(sc, {})
+                            export_text += f"- {sc} (฿{sp.get('price', 0):,.0f})\n"
+                    export_text += f"\nTotal Estimated Price: ฿{total_price:,.0f}\n"
             
-                st.download_button(
-                    label="📥 Export Summary (Text)",
-                    data=export_text.encode('utf-8'),
-                    file_name=f"proposal_{sel_pid}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
+                    st.download_button(
+                        label="📥 Export Summary (Text)",
+                        data=export_text.encode('utf-8'),
+                        file_name=f"proposal_{sel_pid}.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
             
-            st.markdown('</div>', unsafe_allow_html=True) # ปิดกล่อง Card หลัก
         else:
             st.markdown(f"""
             <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:12px; padding:30px 16px; text-align:center; color:{MUTED};">
@@ -1113,69 +1134,84 @@ else:
     # Disease Specific Command Center
     # ---------------------------------------------
     disease_df = dv[active_config["filter_condition"](dv)].copy()
-    
-    st.markdown(f'<div class="header-title">{active_config["icon"]} {selected_tab_key} Command Center</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="header-sub">เป้าหมายการรักษา: {active_config["target_desc"]}</div><br>', unsafe_allow_html=True)
-    
+
+    render_page_header(
+        active_config["icon"], f"{selected_tab_key} Command Center",
+        f"เป้าหมายการรักษา: {active_config['target_desc']}"
+    )
+
     # 1. Priority Summary (Executive Summary)
-    c1, c2, c3 = st.columns(3)
-    c1.metric(f"จำนวนผู้ป่วย (ตามตัวกรอง)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} คน")
+    n_patients = disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df)
     p1_count = len(disease_df[disease_df["priority_status"] == "P1-Urgent"])
-    c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน", delta="-ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
-    
+    p2_count = len(disease_df[disease_df["priority_status"] == "P2-Warning"])
+    c1, c2, c3 = st.columns(3)
+    c1.metric("จำนวนผู้ป่วย (ตามตัวกรอง)", f"{n_patients:,} คน")
+    c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน",
+              delta="ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
+    c3.metric("เฝ้าระวัง (P2-Warning)", f"{p2_count} คน")
+
+    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+
     # 2. Contextual Search filtering
     if search_term and "patient_id" in disease_df.columns:
         disease_df = disease_df[disease_df["patient_id"].astype(str).str.contains(search_term, case=False)]
-        
+
     # 3. Dynamic Priority Table
-    st.markdown("### 🚨 รายชื่อผู้ป่วย (Priority List)")
-    if not disease_df.empty:
-        sort_df = disease_df.sort_values(by=["priority_status"], ascending=True).copy()
-        
-        show_cols = ["patient_id", "visit_date", "days_since_last_visit", "priority_status", "systolic", "bmi"]
-        show_cols = [c for c in show_cols if c in sort_df.columns]
-        
-        def highlight_priority(row):
-            if row.get("priority_status") == "P1-Urgent": return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
-            if row.get("priority_status") == "P2-Warning": return ["background-color:#FEF0C7; color:#B54708"] * len(row)
-            return [""] * len(row)
-            
-        selection = st.dataframe(
-            sort_df[show_cols].style.apply(highlight_priority, axis=1), 
-            use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key=f"table_{selected_tab_key}"
-        )
-        
-        # 4. Action Oriented (Combined Care Package)
-        sel_idx = selection.selection.rows
-        if sel_idx:
+    with st.container(key="card_priority_table"):
+        st.markdown('<div class="panel-title">🚨 รายชื่อผู้ป่วย (Priority List)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub">คลิกแถวเพื่อดูคำแนะนำ Combined Care Package</div>', unsafe_allow_html=True)
+        if not disease_df.empty:
+            sort_df = disease_df.sort_values(by=["priority_status"], ascending=True).copy()
+
+            show_cols = ["patient_id", "visit_date", "days_since_last_visit", "priority_status", "systolic", "bmi"]
+            show_cols = [c for c in show_cols if c in sort_df.columns]
+
+            def highlight_priority(row):
+                if row.get("priority_status") == "P1-Urgent": return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+                if row.get("priority_status") == "P2-Warning": return ["background-color:#FEF0C7; color:#B54708"] * len(row)
+                return [""] * len(row)
+
+            selection = st.dataframe(
+                sort_df[show_cols].style.apply(highlight_priority, axis=1),
+                use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key=f"table_{selected_tab_key}"
+            )
+            sel_idx = selection.selection.rows
+        else:
+            st.info("ไม่พบคนไข้ในกลุ่มนี้")
+            sel_idx = []
+
+    if not disease_df.empty and sel_idx:
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+        with st.container(key="card_combo_package"):
             sel_pid = sort_df.iloc[sel_idx[0]]["patient_id"]
-            st.markdown(f"### 💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}")
-            
+            st.markdown(f'<div class="panel-title">💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}</div>', unsafe_allow_html=True)
+
             # Analyze all diseases for this patient
             pt_all_visits = df[df["patient_id"] == sel_pid]
-            pt_diseases = pt_all_visits["disease_group"].unique()
-            
+
             combined_tests = []
             risk_multiplier = 1.0
             found_diseases = []
-            
+
             for k, v in DISEASE_CONFIG.items():
                 if v.get("is_general"): continue
                 if any(v["filter_condition"](pt_all_visits)):
                     combined_tests.extend(v["Key_Tests"])
                     risk_multiplier += 0.2
                     found_diseases.append(k)
-                    
-            combined_tests = list(set(combined_tests)) # Unique
-            
+
+            combined_tests = list(set(combined_tests))  # Unique
+
             st.info(f"**พหุโรค (Multi-morbidity):** พบ {len(found_diseases)} โรคเรื้อรังซ้อนทับ ได้แก่ {', '.join(found_diseases)} (Risk Multiplier: {risk_multiplier:.1f}x)")
-            
-            if st.button(f"✨ Generate {selected_tab_key} Care Package", key="btn_combo_pkg"):
+
+            st.markdown('<div class="action-btn">', unsafe_allow_html=True)
+            gen_combo = st.button(f"✨ Generate {selected_tab_key} Care Package", key="btn_combo_pkg", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            if gen_combo:
                 st.success(f"✅ **สร้าง {selected_tab_key} Package สำเร็จ!**")
                 price = len(combined_tests) * 500 + 1500
                 st.markdown(f"**ราคาประเมินรวม:** ฿ {price:,.0f}")
                 st.markdown("**รายการตรวจที่สำคัญที่สุด (Merging Tests from Multi-morbidity):**")
                 for t in combined_tests:
                     st.markdown(f"- {t}")
-    else:
-        st.info("ไม่พบคนไข้ในกลุ่มนี้")
