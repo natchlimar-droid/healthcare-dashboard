@@ -438,8 +438,82 @@ if df is None:
         "กรุณาตรวจสอบว่าไฟล์อยู่ในโฟลเดอร์เดียวกับ `app.py`"
     )
     st.stop()
+    # ============================================================
+# Process patient data
+# ============================================================
+def process_patient_data(dataframe):
+    df_proc = dataframe.copy()
 
+    # ใช้วันที่ล่าสุดในข้อมูลเป็นจุดอ้างอิง
+    today = df_proc["visit_date"].max()
+
+    # หากไม่มีวันที่ที่ใช้ได้ ป้องกัน days_since_last_visit เป็น NaN
+    if pd.isna(today):
+        today = pd.Timestamp.today().normalize()
+
+    # 1) ระบุผู้ป่วยกลุ่มล้างไตจากข้อความวินิจฉัย
+    def is_dialysis(text):
+        if pd.isna(text):
+            return False
+
+        text = str(text).lower()
+
+        keywords = ["ไต", "kidney", "dialysis", "ckd"]
+        return any(keyword in text for keyword in keywords)
+
+    if "diagnosis_text" in df_proc.columns:
+        df_proc["is_dialysis"] = df_proc["diagnosis_text"].apply(is_dialysis)
+    else:
+        df_proc["is_dialysis"] = False
+
+    # 2) คำนวณจำนวนวันตั้งแต่มารับบริการครั้งนั้น
+    if "visit_date" in df_proc.columns:
+        df_proc["days_since_last_visit"] = (
+            today - df_proc["visit_date"]
+        ).dt.days
+
+        # วันที่ว่าง ให้เป็น 0 เพื่อไม่ให้การจัดลำดับล้ม
+        df_proc["days_since_last_visit"] = (
+            df_proc["days_since_last_visit"]
+            .fillna(0)
+            .clip(lower=0)
+        )
+    else:
+        df_proc["days_since_last_visit"] = 0
+
+    # 3) กำหนดระดับความเร่งด่วน
+    def assign_priority(row):
+        days = row.get("days_since_last_visit", 0)
+        disease = str(row.get("disease_group", ""))
+
+        if row.get("is_dialysis", False):
+            if days > 7:
+                return "P1-Urgent"
+            elif days > 3:
+                return "P2-Warning"
+            return "P3-Normal"
+
+        if "เบาหวาน" in disease:
+            if days > 90:
+                return "P1-Urgent"
+            elif days > 30:
+                return "P2-Warning"
+            return "P3-Normal"
+
+        if days > 180:
+            return "P1-Urgent"
+
+        return "P3-Normal"
+
+    df_proc["priority_status"] = df_proc.apply(assign_priority, axis=1)
+
+    return df_proc
+
+
+# เรียกใช้หลังประกาศฟังก์ชันแล้วเท่านั้น
 df = process_patient_data(df)
+
+
 
 
 
