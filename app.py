@@ -2223,7 +2223,7 @@ def render_forecast_dashboard(df):
     fig.update_layout(
         title=dict(
             text="<b>📈 กราฟพยากรณ์ปริมาณผู้รับบริการ และแนวโน้มกลุ่มเสี่ยงวิกฤตล่วงหน้า 24 เดือน (พ.ศ. 2568 - 2569)</b>",
-            font=dict(size=15, color="#0B1B2B", family="Plus Jakarta Sans, sans-serif")
+            font=dict(size=15, color="#0B1B2B")
         ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -2236,7 +2236,7 @@ def render_forecast_dashboard(df):
             y=1.02,
             xanchor="right",
             x=1,
-            font=dict(size=10.5, family="Plus Jakarta Sans, sans-serif"),
+            font=dict(size=11),
             bgcolor="rgba(255,255,255,0.9)",
             bordercolor="#E2E8F0",
             borderwidth=1
@@ -2252,8 +2252,7 @@ def render_forecast_dashboard(df):
             showgrid=True,
             gridcolor="#E2E8F0",
             gridwidth=1,
-            title="จำนวนเคสผู้รับบริการ (ราย)",
-            titlefont=dict(size=12, color="#0B1B2B"),
+            title=dict(text="จำนวนเคสผู้รับบริการ (ราย)", font=dict(size=12, color="#0B1B2B")),
             tickfont=dict(size=10, color="#475569")
         )
     )
