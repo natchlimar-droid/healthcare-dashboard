@@ -1215,58 +1215,48 @@ def render_other_packages_dashboard(dv, df, search_term):
     # =============================================================
     # Header Section (ส่วนหัวระบุผู้รับบริการ & Quick Metrics)
     # =============================================================
-    st.markdown(f"""
-    <div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; box-shadow: 0 3px 12px rgba(0,0,0,0.03);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; border-bottom: 1px solid #F1F5F9; padding-bottom: 14px;">
-            <div style="display: flex; align-items: center; gap: 14px;">
-                <div style="font-size: 2.2rem; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    {gender_icon}
-                </div>
-                <div>
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <span style="font-size: 1.25rem; font-weight: 700; color: #0F172A;">ผู้รับบริการ HN: {sel_pid}</span>
-                        <span style="background: {tier_bg}; color: {tier_color}; border: 1px solid {tier_color}40; font-size: 0.76rem; font-weight: 700; padding: 3px 10px; border-radius: 20px;">
-                            {tier_label}
-                        </span>
-                    </div>
-                    <div style="font-size: 0.8rem; color: #64748B; margin-top: 3px;">
-                        อายุ: <strong>{age:.0f} ปี</strong> · เพศ: <strong>{gender}</strong> · การวินิจฉัยล่าสุด: <span style="color: #0E5C56; font-weight: 600;">{diag_text}</span> · ประวัติการมารับบริการ: <strong>{visits_count} ครั้ง</strong>
-                    </div>
-                </div>
-            </div>
-            <div style="text-align: right;">
-                <div style="font-size: 0.72rem; color: #64748B; font-weight: 600;">AI TIER MATCHING RESULT</div>
-                <div style="font-size: 1.05rem; font-weight: 700; color: {tier_color};">
-                    ⭐ แนะนำ: Level {assigned_tier} Package
-                </div>
-            </div>
-        </div>
-
-        <!-- Quick Metrics: 4 Indicators -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-            <div class="metric-tile">
-                <div class="metric-tile-title">⚖️ ดัชนีมวลกาย (BMI)</div>
-                <div class="metric-tile-val">{bmi:.1f} <span style="font-size:0.75rem; font-weight:500; color:#64748B;">kg/m²</span></div>
-                <div class="metric-tile-badge" style="background:{bmi_bg}; color:{bmi_c};">{bmi_status}</div>
-            </div>
-            <div class="metric-tile">
-                <div class="metric-tile-title">📏 เส้นรอบเอว (Waist)</div>
-                <div class="metric-tile-val">{waist_cm:.1f} <span style="font-size:0.75rem; font-weight:500; color:#64748B;">ซม.</span></div>
-                <div class="metric-tile-badge" style="background:{waist_bg}; color:{waist_color};">{waist_status}</div>
-            </div>
-            <div class="metric-tile">
-                <div class="metric-tile-title">🩺 ความดันโลหิต (BP)</div>
-                <div class="metric-tile-val">{systolic:.0f}/{diastolic:.0f} <span style="font-size:0.75rem; font-weight:500; color:#64748B;">mmHg</span></div>
-                <div class="metric-tile-badge" style="background:{bp_bg}; color:{bp_c};">{bp_status}</div>
-            </div>
-            <div class="metric-tile">
-                <div class="metric-tile-title">📅 สถานะตรวจสุขภาพปีล่าสุด</div>
-                <div class="metric-tile-val" style="font-size: 0.95rem; line-height: 1.6; margin-top: 2px;">{checkup_icon} {checkup_status}</div>
-                <div class="metric-tile-badge" style="background:{checkup_bg}; color:{checkup_c};">Annual Checkup Tracking</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""<div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; box-shadow: 0 3px 12px rgba(0,0,0,0.03);">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; border-bottom: 1px solid #F1F5F9; padding-bottom: 14px;">
+<div style="display: flex; align-items: center; gap: 14px;">
+<div style="font-size: 2.2rem; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{gender_icon}</div>
+<div>
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+<span style="font-size: 1.25rem; font-weight: 700; color: #0F172A;">ผู้รับบริการ HN: {sel_pid}</span>
+<span style="background: {tier_bg}; color: {tier_color}; border: 1px solid {tier_color}40; font-size: 0.76rem; font-weight: 700; padding: 3px 10px; border-radius: 20px;">{tier_label}</span>
+</div>
+<div style="font-size: 0.8rem; color: #64748B; margin-top: 3px;">
+อายุ: <strong>{age:.0f} ปี</strong> · เพศ: <strong>{gender}</strong> · การวินิจฉัยล่าสุด: <span style="color: #0E5C56; font-weight: 600;">{diag_text}</span> · ประวัติการมารับบริการ: <strong>{visits_count} ครั้ง</strong>
+</div>
+</div>
+</div>
+<div style="text-align: right;">
+<div style="font-size: 0.72rem; color: #64748B; font-weight: 600;">AI TIER MATCHING RESULT</div>
+<div style="font-size: 1.05rem; font-weight: 700; color: {tier_color};">⭐ แนะนำ: Level {assigned_tier} Package</div>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+<div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+<div style="font-size: 0.72rem; font-weight: 600; color: #64748B; margin-bottom: 2px;">⚖️ ดัชนีมวลกาย (BMI)</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 1.25rem; font-weight: 700; color: #0F172A;">{bmi:.1f} <span style="font-size:0.75rem; font-weight:500; color:#64748B;">kg/m²</span></div>
+<div style="font-size: 0.68rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; display: inline-block; margin-top: 2px; background:{bmi_bg}; color:{bmi_c};">{bmi_status}</div>
+</div>
+<div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+<div style="font-size: 0.72rem; font-weight: 600; color: #64748B; margin-bottom: 2px;">📏 เส้นรอบเอว (Waist)</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 1.25rem; font-weight: 700; color: #0F172A;">{waist_cm:.1f} <span style="font-size:0.75rem; font-weight:500; color:#64748B;">ซม.</span></div>
+<div style="font-size: 0.68rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; display: inline-block; margin-top: 2px; background:{waist_bg}; color:{waist_color};">{waist_status}</div>
+</div>
+<div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+<div style="font-size: 0.72rem; font-weight: 600; color: #64748B; margin-bottom: 2px;">🩺 ความดันโลหิต (BP)</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 1.25rem; font-weight: 700; color: #0F172A;">{systolic:.0f}/{diastolic:.0f} <span style="font-size:0.75rem; font-weight:500; color:#64748B;">mmHg</span></div>
+<div style="font-size: 0.68rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; display: inline-block; margin-top: 2px; background:{bp_bg}; color:{bp_c};">{bp_status}</div>
+</div>
+<div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+<div style="font-size: 0.72rem; font-weight: 600; color: #64748B; margin-bottom: 2px;">📅 สถานะตรวจสุขภาพปีล่าสุด</div>
+<div style="font-size: 0.95rem; line-height: 1.6; margin-top: 2px; font-weight: 600; color: #0F172A;">{checkup_icon} {checkup_status}</div>
+<div style="font-size: 0.68rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; display: inline-block; margin-top: 2px; background:{checkup_bg}; color:{checkup_c};">Annual Checkup Tracking</div>
+</div>
+</div>
+</div>""", unsafe_allow_html=True)
 
     # =============================================================
     # Main Content Area: 4-Level Package Grid
