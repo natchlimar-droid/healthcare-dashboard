@@ -2018,12 +2018,13 @@ def render_forecast_dashboard(df):
         scenario = st.radio(
             "🎯 แผนสถานการณ์พยากรณ์ (Forecast Scenario):",
             ["📈 มาตรฐาน (Baseline Trend)", "🚀 เชิงรุก (Aggressive Campaign +10%)", "🛡️ อนุรักษ์นิยม (Conservative -5%)"],
-            horizontal=True
+            horizontal=True,
+            key="fc_scenario"
         )
     with ctrl_col2:
-        show_ci_band = st.checkbox("🛡️ แสดง Confidence Band (95%)", value=True)
+        show_ci_band = st.checkbox("🛡️ แสดง Confidence Band (95%)", value=True, key="fc_show_ci")
     with ctrl_col3:
-        show_crit_line = st.checkbox("⚠️ แสดงเส้นแนวโน้มกลุ่มเสี่ยง NCDs", value=True)
+        show_crit_line = st.checkbox("⚠️ แสดงเส้นแนวโน้มกลุ่มเสี่ยง NCDs", value=True, key="fc_show_crit")
 
     if "เชิงรุก" in scenario:
         scenario_mult = 1.10
