@@ -72,6 +72,14 @@ HEALTH_PACKAGES = {
 }
 
 
+def render_custom_html(html_str):
+    """
+    Renders HTML safely without CommonMark/Markdown turning indented lines
+    into <pre><code> blocks.
+    """
+    clean_str = "\n".join(line.strip() for line in html_str.strip().splitlines() if line.strip())
+    st.markdown(clean_str, unsafe_allow_html=True)
+
 
 SYSTEM_PROMPT_HEALTH_ARCHITECT = (
     "คุณคือ Senior Health Data Architect และผู้เชี่ยวชาญด้านเวชศาสตร์ป้องกันและระบบคัดกรองสุขภาพอัจฉริยะ "
@@ -1356,152 +1364,163 @@ def render_other_packages_dashboard(dv, df, search_term):
     else:
         other_dv = dv.copy()
 
-    # Title Hero & System Prompt Banner
-    st.markdown(f"""
-    <div class="pkg-header-hero" style="background: linear-gradient(135deg, #0E5C56 0%, #00875A 100%); border-radius: 16px; padding: 22px 26px; color: white; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(14,92,86,0.18);">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
-            <div>
-                <div style="display: flex; align-items: center; gap: 14px;">
-                    <div style="font-size: 2.2rem; background: rgba(255,255,255,0.18); border-radius: 14px; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center;">🏥</div>
-                    <div>
-                        <div style="font-size: 1.45rem; font-weight: 800; letter-spacing: -0.3px;">แพคเกจตรวจสุขภาพ 4 กลุ่ม โรงพยาบาลวิชัยเวชฯ อ้อมน้อย</div>
-                        <div style="font-size: 0.88rem; color: #E2E8F0; margin-top: 4px; opacity: 0.95;">
-                            เลือกให้เหมาะกับคุณ...เพื่อสุขภาพที่ดีในทุกช่วงชีวิต · ระบบ AI Health Data Architect วิเคราะห์เฉพาะบุคคล
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div style="background: rgba(255,255,255,0.14); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.25); border-radius: 12px; padding: 10px 18px; text-align: right;">
-                <div style="font-size: 0.72rem; color: #A7F3D0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">Vichaivej Omnoi Hospital</div>
-                <div style="font-size: 0.95rem; font-weight: 700; color: white;">4-Level Clinical Architecture</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Accordion System Prompt Box
-    with st.expander("🤖 คลิกเพื่อตรวจสอบคำสั่งการระบบ AI (System Prompt) ของ Health Data Architect", expanded=False):
-        st.markdown(f"""
-        <div style="background: #F8FAFC; border-left: 4px solid #0E5C56; border-radius: 8px; padding: 14px 18px; font-size: 0.88rem; color: #1E293B; line-height: 1.7;">
-            <strong>System Prompt คำสั่งการระบบ AI:</strong><br>
-            <em>"{SYSTEM_PROMPT_HEALTH_ARCHITECT}"</em>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # -------------------------------------------------------------
-    # Search & Select Patient Section
-    # -------------------------------------------------------------
-    pts_pool = other_dv.copy()
-    if search_term and "patient_id" in pts_pool.columns:
-        pts_pool = pts_pool[pts_pool["patient_id"].astype(str).str.contains(search_term, case=False)]
-
-    if pts_pool.empty:
-        st.warning("⚠️ ไม่พบรายชื่อผู้รับบริการตามคำค้นหา")
-        return
-
-    # สร้างรายชื่อผู้รับบริการให้เลือก
-    if "patient_id" in pts_pool.columns:
-        avail_pids = pts_pool["patient_id"].dropna().unique().tolist()
-    else:
-        avail_pids = [f"PT-{i+1:03d}" for i in range(min(10, len(pts_pool)))]
-
-    # Filter Bar
-    fcol1, fcol2 = st.columns([1.5, 2.5])
-    with fcol1:
-        sel_pid = st.selectbox(
-            "👤 เลือกผู้รับบริการที่ต้องการวิเคราะห์:",
-            options=avail_pids,
-            index=0,
-            key="sel_other_patient_id"
+    # รองรับการค้นหา
+    if search_term:
+        mask = other_dv.astype(str).apply(
+            lambda col: col.str.contains(search_term, case=False, na=False)
         )
-    with fcol2:
-        st.markdown(f"""
-        <div style="font-size: 0.78rem; color: #64748B; margin-top: 28px;">
-            พบผู้รับบริการในระบบทั้งหมด <strong>{len(avail_pids):,} ราย</strong> (สามารถพิมพ์ค้นหา HN หรือ ID ในช่องค้นหาได้)
-        </div>
-        """, unsafe_allow_html=True)
+        other_dv = other_dv[mask.any(axis=1)]
 
-    # ดึงข้อมูลผู้รับบริการที่เลือก
-    if "patient_id" in df.columns:
-        pt_records = df[df["patient_id"] == sel_pid]
-    elif "patient_id" in pts_pool.columns:
-        pt_records = pts_pool[pts_pool["patient_id"] == sel_pid]
-    else:
-        pt_records = pts_pool.iloc[0:1]
+    # ระบบแท็บเพื่อเก็บทั้งโค้ดใหม่ (โบรชัวร์) และโค้ดเดิม (ตาราง)
+    tab_brochure, tab_raw_table = st.tabs([
+        "🏥 แพคเกจตรวจสุขภาพ 4 กลุ่ม (โบรชัวร์ รพ.วิชัยเวชฯ อ้อมน้อย - ใหม่)",
+        "📊 ตารางข้อมูลผู้รับบริการ (มุมมองเดิม / โค้ดเก่า)"
+    ])
 
-    if pt_records.empty:
-        pt_row = pts_pool.iloc[0].to_dict()
-    else:
-        pt_row = pt_records.iloc[-1].to_dict()
-        pt_row["visits"] = len(pt_records)
+    # -------------------------------------------------------------
+    # แท็บที่ 2: โค้ดเดิม (Raw Data Table)
+    # -------------------------------------------------------------
+    with tab_raw_table:
+        st.markdown("##### 📋 ข้อมูลผู้รับบริการแบบตาราง (Original View / โค้ดเก่าเดิม)")
+        st.dataframe(other_dv, use_container_width=True)
 
-    # ข้อมูลประชากรและสถิติ
-    age = float(pt_row.get("age_at_visit", pt_row.get("age", pt_row.get("patient_age", 38))))
-    gender = str(pt_row.get("gender", pt_row.get("sex", "ไม่ระบุ")))
-    bmi = float(pt_row.get("bmi", 22.5))
-    systolic = float(pt_row.get("systolic", pt_row.get("sbp", 120)) if pd.notna(pt_row.get("systolic", pt_row.get("sbp", 120))) else 120)
-    diastolic = float(pt_row.get("diastolic", pt_row.get("dbp", 80)) if pd.notna(pt_row.get("diastolic", pt_row.get("dbp", 80))) else 80)
-    visits_count = int(pt_row.get("visits", 1))
-    diag_text = str(pt_row.get("diagnosis_clean", pt_row.get("diagnosis_text", pt_row.get("diagnosis", "ตรวจสุขภาพทั่วไป"))))
+    # -------------------------------------------------------------
+    # แท็บที่ 1: โค้ดใหม่ (โบรชัวร์ 4 กลุ่ม รพ.วิชัยเวชฯ อ้อมน้อย)
+    # -------------------------------------------------------------
+    with tab_brochure:
+        # Title Hero Banner
+        hero_html = f"""<div class="pkg-header-hero" style="background: linear-gradient(135deg, #0E5C56 0%, #00875A 100%); border-radius: 16px; padding: 22px 26px; color: white; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(14,92,86,0.18);">
+<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+<div>
+<div style="display: flex; align-items: center; gap: 14px;">
+<div style="font-size: 2.2rem; background: rgba(255,255,255,0.18); border-radius: 14px; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center;">🏥</div>
+<div>
+<div style="font-size: 1.45rem; font-weight: 800; letter-spacing: -0.3px;">แพคเกจตรวจสุขภาพ 4 กลุ่ม โรงพยาบาลวิชัยเวชฯ อ้อมน้อย</div>
+<div style="font-size: 0.88rem; color: #E2E8F0; margin-top: 4px; opacity: 0.95;">
+เลือกให้เหมาะกับคุณ...เพื่อสุขภาพที่ดีในทุกช่วงชีวิต · ระบบ AI Health Data Architect วิเคราะห์เฉพาะบุคคล
+</div>
+</div>
+</div>
+</div>
+<div style="background: rgba(255,255,255,0.14); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.25); border-radius: 12px; padding: 10px 18px; text-align: right;">
+<div style="font-size: 0.72rem; color: #A7F3D0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;">Vichaivej Omnoi Hospital</div>
+<div style="font-size: 0.95rem; font-weight: 700; color: white;">4-Level Clinical Architecture</div>
+</div>
+</div>
+</div>"""
+        render_custom_html(hero_html)
 
-    # ประเมินระดับความเสี่ยง (Level 1-4) และ Best Match Sub-package
-    assigned_tier, risk_reasons, best_match_sub_pkg = _assess_patient_tier(pt_row)
+        # Accordion System Prompt Box
+        with st.expander("🤖 คลิกเพื่อตรวจสอบคำสั่งการระบบ AI (System Prompt) ของ Health Data Architect", expanded=False):
+            prompt_html = f"""<div style="background: #F8FAFC; border-left: 4px solid #0E5C56; border-radius: 8px; padding: 14px 18px; font-size: 0.88rem; color: #1E293B; line-height: 1.7;">
+<strong>System Prompt คำสั่งการระบบ AI:</strong><br>
+<em>"{SYSTEM_PROMPT_HEALTH_ARCHITECT}"</em>
+</div>"""
+            render_custom_html(prompt_html)
 
-    # 1) ดัชนีรอบเอว (Waist)
-    if gender == "ช":
-        waist_cm = round(bmi * 3.65, 1)
-        waist_status = "เกินเกณฑ์ลงพุง (>90 ซม.)" if waist_cm > 90 else "ปกติ (<=90 ซม.)"
-        waist_color = "#DC2626" if waist_cm > 90 else "#16A34A"
-        waist_bg = "#FEE2E2" if waist_cm > 90 else "#DCFCE7"
-    else:
-        waist_cm = round(bmi * 3.35, 1)
-        waist_status = "เกินเกณฑ์ลงพุง (>80 ซม.)" if waist_cm > 80 else "ปกติ (<=80 ซม.)"
-        waist_color = "#DC2626" if waist_cm > 80 else "#16A34A"
-        waist_bg = "#FEE2E2" if waist_cm > 80 else "#DCFCE7"
+        # รายชื่อผู้รับบริการสำหรับวิเคราะห์
+        if other_dv.empty:
+            st.warning("⚠️ ไม่พบรายชื่อผู้รับบริการตามคำค้นหา")
+            return
 
-    # 2) BMI Status
-    if bmi >= 30.0:
-        bmi_status, bmi_c, bmi_bg = "โรคอ้วนระดับ 2", "#DC2626", "#FEE2E2"
-    elif bmi >= 25.0:
-        bmi_status, bmi_c, bmi_bg = "โรคอ้วนระดับ 1", "#EA580C", "#FFEDD5"
-    elif bmi >= 23.0:
-        bmi_status, bmi_c, bmi_bg = "น้ำหนักเกินเกณฑ์", "#D97706", "#FEF3C7"
-    elif bmi >= 18.5:
-        bmi_status, bmi_c, bmi_bg = "น้ำหนักสมส่วน", "#16A34A", "#DCFCE7"
-    else:
-        bmi_status, bmi_c, bmi_bg = "น้ำหนักน้อยกว่าเกณฑ์", "#2563EB", "#DBEAFE"
+        if "patient_id" in other_dv.columns:
+            avail_pids = other_dv["patient_id"].dropna().unique().tolist()
+        else:
+            avail_pids = [f"PT-{i+1:03d}" for i in range(min(10, len(other_dv)))]
 
-    # 3) Blood Pressure Status
-    if systolic >= 140 or diastolic >= 90:
-        bp_status, bp_c, bp_bg = "ความดันโลหิตสูง", "#DC2626", "#FEE2E2"
-    elif systolic >= 120 or diastolic >= 80:
-        bp_status, bp_c, bp_bg = "เฝ้าระวัง (Pre-HT)", "#D97706", "#FEF3C7"
-    else:
-        bp_status, bp_c, bp_bg = "ปกติ (<120/80)", "#16A34A", "#DCFCE7"
+        fcol1, fcol2 = st.columns([1.5, 2.5])
+        with fcol1:
+            sel_pid = st.selectbox(
+                "👤 เลือกผู้รับบริการที่ต้องการวิเคราะห์:",
+                options=avail_pids,
+                index=0,
+                key="sel_other_patient_id"
+            )
+        with fcol2:
+            st.markdown(f"""
+            <div style="font-size: 0.78rem; color: #64748B; margin-top: 28px;">
+                พบผู้รับบริการในระบบทั้งหมด <strong>{len(avail_pids):,} ราย</strong>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # 4) Last Year Checkup Status
-    recent_date = pt_records["visit_date"].max() if ("visit_date" in pt_records.columns and pt_records["visit_date"].notna().any()) else pd.NaT
-    if pd.notna(recent_date) and recent_date.year >= 2025:
-        checkup_status = f"ตรวจแล้วเมื่อ {recent_date.strftime('%d/%m/%Y')}"
-        checkup_c, checkup_bg, checkup_icon = "#16A34A", "#DCFCE7", "✅"
-    else:
-        checkup_status = "ยังไม่พบประวัติตรวจสุขภาพ 1 ปี (Overdue)"
-        checkup_c, checkup_bg, checkup_icon = "#D97706", "#FEF3C7", "⚠️"
+        # ดึงข้อมูลผู้รับบริการที่เลือก
+        if "patient_id" in df.columns:
+            pt_records = df[df["patient_id"] == sel_pid]
+        elif "patient_id" in other_dv.columns:
+            pt_records = other_dv[other_dv["patient_id"] == sel_pid]
+        else:
+            pt_records = other_dv.iloc[0:1]
 
-    # Tier Badges config
-    tier_badges_info = {
-        1: ("กลุ่ม 1: ตรวจสุขภาพทั่วไป", "#0E7055", "#DCFCE7"),
-        2: ("กลุ่ม 2: ยังไม่พบโรคแต่มีความเสี่ยง", "#D97706", "#FEF3C7"),
-        3: ("กลุ่ม 3: เริ่มมีความผิดปกติ/โรคระยะเริ่มต้น", "#DC2626", "#FEE2E2"),
-        4: ("กลุ่ม 4: มีอาการซ้ำ ๆ / ควรประเมินเพิ่มเติม", "#6941C6", "#F3E8FF")
-    }
-    tier_label, tier_color, tier_bg = tier_badges_info[assigned_tier]
-    gender_icon = "👨" if gender == "ช" else ("👩" if gender == "ญ" else "👤")
+        if pt_records.empty:
+            pt_row = other_dv.iloc[0].to_dict()
+        else:
+            pt_row = pt_records.iloc[-1].to_dict()
+            pt_row["visits"] = len(pt_records)
 
-    # =============================================================
-    # Header Section (ส่วนหัวระบุผู้รับบริการ & Quick Metrics)
-    # =============================================================
-    st.markdown(f"""<div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 18px 20px; margin-bottom: 22px; box-shadow: 0 3px 12px rgba(0,0,0,0.03);">
+        # ข้อมูลประชากรและสถิติ
+        age = float(pt_row.get("age_at_visit", pt_row.get("age", pt_row.get("patient_age", 38))))
+        gender = str(pt_row.get("gender", pt_row.get("sex", "ไม่ระบุ")))
+        bmi = float(pt_row.get("bmi", 22.5))
+        systolic = float(pt_row.get("systolic", pt_row.get("sbp", 120)) if pd.notna(pt_row.get("systolic", pt_row.get("sbp", 120))) else 120)
+        diastolic = float(pt_row.get("diastolic", pt_row.get("dbp", 80)) if pd.notna(pt_row.get("diastolic", pt_row.get("dbp", 80))) else 80)
+        visits_count = int(pt_row.get("visits", 1))
+        diag_text = str(pt_row.get("diagnosis_clean", pt_row.get("diagnosis_text", pt_row.get("diagnosis", "ตรวจสุขภาพทั่วไป"))))
+
+        # ประเมินระดับความเสี่ยง (Level 1-4) และ Best Match Sub-package
+        assigned_tier, risk_reasons, best_match_sub_pkg = _assess_patient_tier(pt_row)
+
+        # 1) ดัชนีรอบเอว (Waist)
+        if gender == "ช":
+            waist_cm = round(bmi * 3.65, 1)
+            waist_status = "เกินเกณฑ์ลงพุง (>90 ซม.)" if waist_cm > 90 else "ปกติ (<=90 ซม.)"
+            waist_color = "#DC2626" if waist_cm > 90 else "#16A34A"
+            waist_bg = "#FEE2E2" if waist_cm > 90 else "#DCFCE7"
+        else:
+            waist_cm = round(bmi * 3.35, 1)
+            waist_status = "เกินเกณฑ์ลงพุง (>80 ซม.)" if waist_cm > 80 else "ปกติ (<=80 ซม.)"
+            waist_color = "#DC2626" if waist_cm > 80 else "#16A34A"
+            waist_bg = "#FEE2E2" if waist_cm > 80 else "#DCFCE7"
+
+        # 2) BMI Status
+        if bmi >= 30.0:
+            bmi_status, bmi_c, bmi_bg = "โรคอ้วนระดับ 2", "#DC2626", "#FEE2E2"
+        elif bmi >= 25.0:
+            bmi_status, bmi_c, bmi_bg = "โรคอ้วนระดับ 1", "#EA580C", "#FFEDD5"
+        elif bmi >= 23.0:
+            bmi_status, bmi_c, bmi_bg = "น้ำหนักเกินเกณฑ์", "#D97706", "#FEF3C7"
+        elif bmi >= 18.5:
+            bmi_status, bmi_c, bmi_bg = "น้ำหนักสมส่วน", "#16A34A", "#DCFCE7"
+        else:
+            bmi_status, bmi_c, bmi_bg = "น้ำหนักน้อยกว่าเกณฑ์", "#2563EB", "#DBEAFE"
+
+        # 3) Blood Pressure Status
+        if systolic >= 140 or diastolic >= 90:
+            bp_status, bp_c, bp_bg = "ความดันโลหิตสูง", "#DC2626", "#FEE2E2"
+        elif systolic >= 120 or diastolic >= 80:
+            bp_status, bp_c, bp_bg = "เฝ้าระวัง (Pre-HT)", "#D97706", "#FEF3C7"
+        else:
+            bp_status, bp_c, bp_bg = "ปกติ (<120/80)", "#16A34A", "#DCFCE7"
+
+        # 4) Last Year Checkup Status
+        recent_date = pt_records["visit_date"].max() if ("visit_date" in pt_records.columns and pt_records["visit_date"].notna().any()) else pd.NaT
+        if pd.notna(recent_date) and recent_date.year >= 2025:
+            checkup_status = f"ตรวจแล้วเมื่อ {recent_date.strftime('%d/%m/%Y')}"
+            checkup_c, checkup_bg, checkup_icon = "#16A34A", "#DCFCE7", "✅"
+        else:
+            checkup_status = "ยังไม่พบประวัติตรวจสุขภาพ 1 ปี (Overdue)"
+            checkup_c, checkup_bg, checkup_icon = "#D97706", "#FEF3C7", "⚠️"
+
+        tier_badges_info = {
+            1: ("กลุ่ม 1: ตรวจสุขภาพทั่วไป", "#0E7055", "#DCFCE7"),
+            2: ("กลุ่ม 2: ยังไม่พบโรคแต่มีความเสี่ยง", "#D97706", "#FEF3C7"),
+            3: ("กลุ่ม 3: เริ่มมีความผิดปกติ/โรคระยะเริ่มต้น", "#DC2626", "#FEE2E2"),
+            4: ("กลุ่ม 4: มีอาการซ้ำ ๆ / ควรประเมินเพิ่มเติม", "#6941C6", "#F3E8FF")
+        }
+        tier_label, tier_color, tier_bg = tier_badges_info[assigned_tier]
+        gender_icon = "👨" if gender == "ช" else ("👩" if gender == "ญ" else "👤")
+
+        # Header Section & Quick Metrics
+        summary_bar_html = f"""<div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 18px 20px; margin-bottom: 22px; box-shadow: 0 3px 12px rgba(0,0,0,0.03);">
 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 16px; border-bottom: 1px solid #F1F5F9; padding-bottom: 14px;">
 <div style="display: flex; align-items: center; gap: 14px;">
 <div style="font-size: 2.2rem; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{gender_icon}</div>
@@ -1519,7 +1538,7 @@ def render_other_packages_dashboard(dv, df, search_term):
 <div style="font-size: 0.72rem; color: #64748B; font-weight: 700; letter-spacing: 0.5px;">AI CLINICAL RECOMMENDATION</div>
 <div style="font-size: 1.05rem; font-weight: 800; color: {tier_color};">⭐ {tier_label}</div>
 <div style="background: linear-gradient(135deg, #FF6B00, #FFA133); color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; display: inline-block; margin-top: 4px; box-shadow: 0 2px 6px rgba(255,107,0,0.3);">
-    🎯 Best Match: {best_match_sub_pkg}
+🎯 Best Match: {best_match_sub_pkg}
 </div>
 </div>
 </div>
@@ -1545,410 +1564,365 @@ def render_other_packages_dashboard(dv, df, search_term):
 <div style="font-size: 0.68rem; font-weight: 600; padding: 2px 6px; border-radius: 6px; display: inline-block; margin-top: 2px; background:{checkup_bg}; color:{checkup_c};">Annual Checkup Tracking</div>
 </div>
 </div>
-</div>""", unsafe_allow_html=True)
+</div>"""
+        render_custom_html(summary_bar_html)
 
-    # =============================================================
-    # Main Content Area: 4-Level Package Grid (4 Columns Brochure Layout)
-    # =============================================================
-    st.markdown('<div class="panel-title" style="font-size: 1.25rem; font-weight: 800; color: #0F172A; margin-bottom: 4px;">แพคเกจตรวจสุขภาพ 4 กลุ่ม (โรงพยาบาลวิชัยเวชฯ อ้อมน้อย)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="panel-sub" style="font-size: 0.85rem; color: #64748B; margin-bottom: 20px;">เลือกให้เหมาะกับคุณ...เพื่อสุขภาพที่ดีในทุกช่วงชีวิต (วิเคราะห์เปรียบเทียบ 12 แพ็กเกจย่อยตามข้อมูลจริงในโบรชัวร์)</div>', unsafe_allow_html=True)
+        # 4-Level Package Grid (4 Columns Layout)
+        st.markdown('<div class="panel-title" style="font-size: 1.25rem; font-weight: 800; color: #0F172A; margin-bottom: 4px;">แพคเกจตรวจสุขภาพ 4 กลุ่ม (โรงพยาบาลวิชัยเวชฯ อ้อมน้อย)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub" style="font-size: 0.85rem; color: #64748B; margin-bottom: 20px;">เลือกให้เหมาะกับคุณ...เพื่อสุขภาพที่ดีในทุกช่วงชีวิต (วิเคราะห์เปรียบเทียบ 12 แพ็กเกจย่อยตามข้อมูลจริงในโบรชัวร์)</div>', unsafe_allow_html=True)
 
-    col1, col2, col3, col4 = st.columns(4)
-    cols = [col1, col2, col3, col4]
+        col1, col2, col3, col4 = st.columns(4)
+        cols = [col1, col2, col3, col4]
 
-    for col, level_key in zip(cols, [1, 2, 3, 4]):
-        group = HEALTH_PACKAGES_4LEVEL[level_key]
-        with col:
-            # -------------------------------------------------------------
-            # Group Header Card (ตามดีไซน์ส่วนหัวของโบรชัวร์)
-            # -------------------------------------------------------------
-            is_tier_match = (assigned_tier == level_key)
-            header_ring = f"box-shadow: 0 0 0 3px {group['header_bg']}40, 0 6px 16px rgba(0,0,0,0.08);" if is_tier_match else "box-shadow: 0 2px 10px rgba(0,0,0,0.04);"
+        for col, level_key in zip(cols, [1, 2, 3, 4]):
+            group = HEALTH_PACKAGES_4LEVEL[level_key]
+            with col:
+                is_tier_match = (assigned_tier == level_key)
+                header_ring = f"box-shadow: 0 0 0 3px {group['header_bg']}40, 0 6px 16px rgba(0,0,0,0.08);" if is_tier_match else "box-shadow: 0 2px 10px rgba(0,0,0,0.04);"
 
-            st.markdown(f"""
-            <div style="background: {group['header_bg']}; border-radius: 14px; padding: 16px 14px; color: white; margin-bottom: 14px; {header_ring} min-height: 180px; display: flex; flex-direction: column; justify-content: space-between;">
-                <div>
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                        <div style="background: white; color: {group['header_bg']}; font-size: 1.15rem; font-weight: 800; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
-                            {group['level']}
-                        </div>
-                        <div style="font-size: 1.02rem; font-weight: 800; line-height: 1.25; letter-spacing: -0.2px;">
-                            {group['short_title']}
-                        </div>
-                    </div>
-                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.92); line-height: 1.35; margin-bottom: 10px;">
-                        {group['target_audience']}
-                    </div>
-                </div>
-                <div style="background: rgba(255,255,255,0.95); color: {group['header_bg']}; font-size: 0.74rem; font-weight: 700; padding: 6px 10px; border-radius: 10px; text-align: center; line-height: 1.35; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
-                    {group['badge']}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+                header_html = f"""<div style="background: {group['header_bg']}; border-radius: 14px; padding: 16px 14px; color: white; margin-bottom: 14px; {header_ring} min-height: 180px; display: flex; flex-direction: column; justify-content: space-between;">
+<div>
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+<div style="background: white; color: {group['header_bg']}; font-size: 1.15rem; font-weight: 800; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">{group['level']}</div>
+<div style="font-size: 1.02rem; font-weight: 800; line-height: 1.25; letter-spacing: -0.2px;">{group['short_title']}</div>
+</div>
+<div style="font-size: 0.75rem; color: rgba(255,255,255,0.92); line-height: 1.35; margin-bottom: 10px;">{group['target_audience']}</div>
+</div>
+<div style="background: rgba(255,255,255,0.95); color: {group['header_bg']}; font-size: 0.74rem; font-weight: 700; padding: 6px 10px; border-radius: 10px; text-align: center; line-height: 1.35; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">{group['badge']}</div>
+</div>"""
+                render_custom_html(header_html)
 
-            # -------------------------------------------------------------
-            # Loop แสดง Sub-packages แต่ละตัวภายใต้กลุ่มนี้
-            # -------------------------------------------------------------
-            for sub_idx, sub in enumerate(group["sub_packages"]):
-                is_best_sub = (sub["name"] == best_match_sub_pkg or sub["short_name"] == best_match_sub_pkg or best_match_sub_pkg in sub["name"])
+                for sub_idx, sub in enumerate(group["sub_packages"]):
+                    is_best_sub = (sub["name"] == best_match_sub_pkg or sub["short_name"] == best_match_sub_pkg or best_match_sub_pkg in sub["name"])
 
-                # Styling สอดคล้องกับ AI Best Match
-                if is_best_sub:
-                    sub_border = "border: 2.5px solid #FF7A00;"
-                    sub_bg = "background: linear-gradient(180deg, #FFFDF8 0%, #FFF8EE 100%);"
-                    sub_shadow = "box-shadow: 0 6px 18px rgba(255, 122, 0, 0.22);"
-                    match_badge_html = """
-                    <div style="background: linear-gradient(135deg, #FF6B00, #FFA133); color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 6px rgba(255,107,0,0.35); margin-bottom: 8px;">
-                        ⭐ AI Best Match
-                    </div>
-                    """
-                else:
-                    sub_border = f"border: 1px solid {group['border_color']}30;"
-                    sub_bg = "background: #FFFFFF;"
-                    sub_shadow = "box-shadow: 0 2px 8px rgba(0,0,0,0.03);"
-                    match_badge_html = ""
-
-                # รายการตรวจสร้าง HTML
-                tests_html = "".join([
-                    f"""<div style="display:flex; align-items:flex-start; gap:6px; margin-bottom:5px; line-height:1.35;">
-                        <span style="color:{group['header_bg']}; font-weight:800; font-size:0.75rem; flex-shrink:0;">•</span>
-                        <span style="font-size:0.74rem; color:#334155;">{t}</span>
-                    </div>"""
-                    for t in sub["tests"]
-                ])
-
-                st.markdown(f"""
-                <div style="{sub_bg} {sub_border} {sub_shadow} border-radius: 14px; padding: 14px; margin-bottom: 12px; transition: transform 0.2s ease;">
-                    {match_badge_html}
-                    <div style="font-size: 0.88rem; font-weight: 800; color: #0F172A; line-height: 1.3; min-height: 38px; display: flex; align-items: center;">
-                        {sub['name']}
-                    </div>
-                    <hr style="border: none; border-top: 1px dashed {group['border_color']}40; margin: 8px 0 10px 0;">
-                    <div style="font-size: 0.72rem; font-weight: 700; color: #64748B; margin-bottom: 6px;">รายการตรวจสำคัญ:</div>
-                    <div style="min-height: 105px;">
-                        {tests_html}
-                    </div>
-                    <div style="display: flex; justify-content: flex-end; align-items: baseline; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #F1F5F9;">
-                        <span style="background: {group['header_bg']}15; color: {group['header_bg']}; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 5px;">ราคา</span>
-                        <span style="font-family:'IBM Plex Mono',monospace; font-size: 1.22rem; font-weight: 800; color: {group['text_accent']};">{sub['price_display']}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # ปุ่มเลือกแพ็กเกจย่อย
-                btn_title = f"เลือก {sub['short_name']}"
-                if is_best_sub:
-                    btn_title = f"⭐ เลือก {sub['short_name']} (แนะนำ)"
-
-                if st.button(btn_title, key=f"btn_sub_{level_key}_{sub_idx}_{sel_pid}", use_container_width=True):
-                    st.session_state["chosen_pkg"] = level_key
-                    st.session_state["chosen_sub_pkg"] = sub["name"]
-                    st.session_state["chosen_sub_price"] = sub["price"]
-                    st.toast(f"✅ เลือก {sub['name']} เรียบร้อยแล้ว")
-
-            # -------------------------------------------------------------
-            # Interactive Popovers ประจำแต่ละคอลัมน์ (Clinical Tools)
-            # -------------------------------------------------------------
-            if level_key == 1:
-                with st.popover("🔍 เปรียบเทียบ Basic vs Standard vs Premium", use_container_width=True):
-                    st.markdown("#### 📋 การเปรียบเทียบแพ็กเกจกลุ่ม 1 (ตรวจสุขภาพทั่วไป)")
-                    st.caption(f"ผู้รับบริการ HN: {sel_pid} (อายุ {age:.0f} ปี)")
-                    st.markdown("""
-                    - **BASIC (990.-):** เหมาะกับผู้มีอายุน้อย แข็งแรง ตรวจปัสสาวะ เลือดพื้นฐาน และเอกซเรย์ปอด
-                    - **STANDARD (2,290.-):** เพิ่มตรวจเลือดครบชุด ตรวจคลื่นไฟฟ้าหัวใจ EKG และอัลตราซาวด์ช่องท้องส่วนบน
-                    - **PREMIUM (4,990.-):** ตรวจครบสูตรทั้ง EKG และอัลตราซาวด์ช่องท้องทั้งส่วนบนและส่วนล่าง
-                    """)
-
-            elif level_key == 2:
-                with st.popover("🩸 ดูรายละเอียดค่า HbA1c และไขมันเชิงลึก", use_container_width=True):
-                    st.markdown("#### 🔬 ผลวิเคราะห์เจาะลึก HbA1c & Lipid Profile")
-                    st.caption(f"ประเมินสำหรับผู้รับบริการ HN: {sel_pid} (อิงเกณฑ์เวชศาสตร์ป้องกัน)")
-
-                    hba1c_est = 5.4 + (bmi - 22.0) * 0.12 if bmi > 22.0 else 5.2
-                    chol_est = 180 + (bmi - 22.0) * 3.5 + (systolic - 120) * 0.4
-                    tg_est = 120 + (bmi - 22.0) * 5.0
-                    hdl_est = max(35.0, 55.0 - (bmi - 22.0) * 1.2)
-                    ldl_est = chol_est - hdl_est - (tg_est / 5.0)
-
-                    c_hba1c = "#DC2626" if hba1c_est >= 6.5 else ("#D97706" if hba1c_est >= 5.7 else "#16A34A")
-                    s_hba1c = "เบาหวาน (Diabetes)" if hba1c_est >= 6.5 else ("เสี่ยงเบาหวาน (Pre-DM)" if hba1c_est >= 5.7 else "ปกติ (<5.7%)")
-
-                    c_ldl = "#DC2626" if ldl_est >= 160 else ("#D97706" if ldl_est >= 130 else "#16A34A")
-                    s_ldl = "สูงผิดปกติ (High)" if ldl_est >= 160 else ("ปริ่มสูง (Borderline)" if ldl_est >= 130 else "เหมาะสม (Optimal)")
-
-                    st.markdown(f"""
-                    <table style="width:100%; font-size:0.8rem; border-collapse:collapse; margin-top:8px;">
-                        <tr style="background:#F8FAFC; border-bottom:1px solid #E2E8F0;">
-                            <th style="padding:6px; text-align:left;">รายการตรวจ (Lab Test)</th>
-                            <th style="padding:6px; text-align:right;">ค่าตรวจ</th>
-                            <th style="padding:6px; text-align:right;">ค่าเป้าหมาย</th>
-                            <th style="padding:6px; text-align:center;">การแปลผล</th>
-                        </tr>
-                        <tr style="border-bottom:1px solid #F1F5F9;">
-                            <td style="padding:6px;"><strong>HbA1c</strong> (น้ำตาลสะสม)</td>
-                            <td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:{c_hba1c};">{hba1c_est:.1f}%</td>
-                            <td style="padding:6px; text-align:right; color:#64748B;">&lt; 5.7%</td>
-                            <td style="padding:6px; text-align:center;"><span style="color:{c_hba1c}; font-weight:600;">{s_hba1c}</span></td>
-                        </tr>
-                        <tr style="border-bottom:1px solid #F1F5F9;">
-                            <td style="padding:6px;"><strong>Total Cholesterol</strong></td>
-                            <td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace;">{chol_est:.0f} mg/dL</td>
-                            <td style="padding:6px; text-align:right; color:#64748B;">&lt; 200</td>
-                            <td style="padding:6px; text-align:center;">{'⚠️ สูง' if chol_est>=200 else '✅ ปกติ'}</td>
-                        </tr>
-                        <tr style="border-bottom:1px solid #F1F5F9;">
-                            <td style="padding:6px;"><strong>Triglycerides</strong></td>
-                            <td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace;">{tg_est:.0f} mg/dL</td>
-                            <td style="padding:6px; text-align:right; color:#64748B;">&lt; 150</td>
-                            <td style="padding:6px; text-align:center;">{'⚠️ สูง' if tg_est>=150 else '✅ ปกติ'}</td>
-                        </tr>
-                        <tr style="border-bottom:1px solid #F1F5F9;">
-                            <td style="padding:6px;"><strong>LDL-C</strong></td>
-                            <td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:{c_ldl};">{ldl_est:.0f} mg/dL</td>
-                            <td style="padding:6px; text-align:right; color:#64748B;">&lt; 130</td>
-                            <td style="padding:6px; text-align:center;"><span style="color:{c_ldl}; font-weight:600;">{s_ldl}</span></td>
-                        </tr>
-                    </table>
-                    """, unsafe_allow_html=True)
-
-            elif level_key == 3:
-                with st.popover("📈 ดูกราฟแนวโน้ม (Trend Analysis) ค่าไต & ตับ", use_container_width=True):
-                    st.markdown("#### 📊 แนวโน้มผลตรวจย้อนหลัง 3 ปี (2024 - 2026)")
-                    st.caption(f"ประเมินฟังก์ชันการทำงานของอวัยวะสำคัญสำหรับ HN: {sel_pid}")
-
-                    trend_tab1, trend_tab2 = st.tabs(["🫘 ค่าไต (Kidney Function)", "🩺 ค่าตับ (Liver Function)"])
-                    years = ["2024", "2025", "2026 (ล่าสุด)"]
-                    kidney_egfr = [92.0 - (age * 0.1), 86.0 - (age * 0.15) - (1 if systolic > 135 else 0), 79.0 - (age * 0.2) - (4 if systolic > 140 else 0)]
-                    kidney_cr = [0.85, 0.96, 1.12 if systolic > 140 else 1.02]
-
-                    with trend_tab1:
-                        fig_kidney = go.Figure()
-                        fig_kidney.add_trace(go.Scatter(
-                            x=years, y=kidney_egfr, mode="lines+markers", name="eGFR (อัตราการกรองไต)",
-                            line=dict(color="#0284C7", width=3), marker=dict(size=8)
-                        ))
-                        fig_kidney.add_trace(go.Scatter(
-                            x=years, y=kidney_cr, mode="lines+markers", name="Creatinine (mg/dL)", yaxis="y2",
-                            line=dict(color="#EA580C", width=3, dash="dot"), marker=dict(size=8)
-                        ))
-                        fig_kidney.add_hline(y=60, line_dash="dash", line_color="#DC2626", annotation_text="เกณฑ์ไตเสื่อม (<60)", annotation_position="bottom right")
-                        fig_kidney.update_layout(
-                            title="แนวโน้ม eGFR & Creatinine",
-                            height=240, margin=dict(l=10, r=10, t=30, b=10),
-                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                            yaxis=dict(title="eGFR (mL/min)", gridcolor="#F1F5F9"),
-                            yaxis2=dict(title="Creatinine", overlaying="y", side="right", showgrid=False),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02)
-                        )
-                        st.plotly_chart(fig_kidney, use_container_width=True)
-
-                    with trend_tab2:
-                        liver_sgpt = [22 + (bmi - 20) * 1.5, 30 + (bmi - 20) * 2.0, 42 + (bmi - 20) * 2.8]
-                        liver_sgot = [20 + (bmi - 20) * 1.2, 26 + (bmi - 20) * 1.6, 35 + (bmi - 20) * 2.2]
-
-                        fig_liver = go.Figure()
-                        fig_liver.add_trace(go.Scatter(
-                            x=years, y=liver_sgpt, mode="lines+markers", name="SGPT/ALT (ตับอักเสบ)",
-                            line=dict(color="#DC2626", width=3), marker=dict(size=8)
-                        ))
-                        fig_liver.add_trace(go.Scatter(
-                            x=years, y=liver_sgot, mode="lines+markers", name="SGOT/AST",
-                            line=dict(color="#F59E0B", width=3), marker=dict(size=8)
-                        ))
-                        fig_liver.add_hline(y=40, line_dash="dash", line_color="#EA580C", annotation_text="ขีดบนปกติ (40 U/L)", annotation_position="top left")
-                        fig_liver.update_layout(
-                            title="แนวโน้มเอนไซม์ตับ (Liver Enzymes)",
-                            height=240, margin=dict(l=10, r=10, t=30, b=10),
-                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                            yaxis=dict(title="U/L", gridcolor="#F1F5F9"),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02)
-                        )
-                        st.plotly_chart(fig_liver, use_container_width=True)
-
-            elif level_key == 4:
-                with st.popover("🔬 เลือกรายการตรวจเฉพาะทางเพิ่มเติม (Add-ons)", use_container_width=True):
-                    st.markdown("#### 🩺 ปรับแต่งรายการตรวจเฉพาะทางเชิงลึก")
-                    st.caption("เลือกการตรวจที่ตรงกับอาการทางคลินิกเพื่อส่งต่อแพทย์ผู้เชี่ยวชาญ")
-
-                    if "SPECIALIZED_DIAGNOSTIC_OPTIONS" in globals():
-                        diag_opts = SPECIALIZED_DIAGNOSTIC_OPTIONS
+                    if is_best_sub:
+                        sub_border = "border: 2.5px solid #FF7A00;"
+                        sub_bg = "background: linear-gradient(180deg, #FFFDF8 0%, #FFF8EE 100%);"
+                        sub_shadow = "box-shadow: 0 6px 18px rgba(255, 122, 0, 0.22);"
+                        match_badge_html = '<div style="background: linear-gradient(135deg, #FF6B00, #FFA133); color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 6px rgba(255,107,0,0.35); margin-bottom: 8px;">⭐ AI Best Match</div>'
                     else:
-                        diag_opts = {
-                            "ส่องกล้องระบบทางเดินอาหาร (EGD / Colonoscopy)": {"price": 7500, "desc": "คัดกรองแผลในกระเพาะอาหารและติ่งเนื้อมะเร็งลำไส้ใหญ่", "icon": "🔬"},
-                            "Low-Dose CT Chest (คัดกรองมะเร็งปอดรังสีต่ำ)": {"price": 4500, "desc": "ตรวจคัดกรองมะเร็งปอดระยะเริ่มต้น", "icon": "🫁"},
-                            "ชุดคัดกรองสารบ่งชี้มะเร็งรวม (CEA, AFP, CA-125, PSA)": {"price": 3500, "desc": "คัดกรองมะเร็งตับ ลำไส้ ต่อมลูกหมาก รังไข่", "icon": "🎗️"},
-                            "ตรวจคลื่นเสียงสะท้อนหัวใจ (Echocardiogram)": {"price": 3800, "desc": "ประเมินกล้ามเนื้อและลิ้นหัวใจอย่างละเอียด", "icon": "❤️"}
-                        }
+                        sub_border = f"border: 1px solid {group['border_color']}30;"
+                        sub_bg = "background: #FFFFFF;"
+                        sub_shadow = "box-shadow: 0 2px 8px rgba(0,0,0,0.03);"
+                        match_badge_html = ""
 
-                    selected_addons = []
-                    addon_total = 0
+                    tests_html = "".join([
+                        f'<div style="display:flex; align-items:flex-start; gap:6px; margin-bottom:5px; line-height:1.35;"><span style="color:{group["header_bg"]}; font-weight:800; font-size:0.75rem; flex-shrink:0;">•</span><span style="font-size:0.74rem; color:#334155;">{t}</span></div>'
+                        for t in sub["tests"]
+                    ])
 
-                    for opt_name, opt_meta in diag_opts.items():
-                        checked = st.checkbox(
-                            f"{opt_meta.get('icon', '🔬')} {opt_name} (+฿{opt_meta['price']:,})",
-                            key=f"chk_{sel_pid}_{opt_name}"
-                        )
-                        st.caption(f"↳ {opt_meta.get('desc', '')}")
-                        if checked:
-                            selected_addons.append((opt_name, opt_meta['price']))
-                            addon_total += opt_meta['price']
+                    card_html = f"""<div style="{sub_bg} {sub_border} {sub_shadow} border-radius: 14px; padding: 14px; margin-bottom: 12px; transition: transform 0.2s ease;">
+{match_badge_html}
+<div style="font-size: 0.88rem; font-weight: 800; color: #0F172A; line-height: 1.3; min-height: 38px; display: flex; align-items: center;">{sub['name']}</div>
+<hr style="border: none; border-top: 1px dashed {group['border_color']}40; margin: 8px 0 10px 0;">
+<div style="font-size: 0.72rem; font-weight: 700; color: #64748B; margin-bottom: 6px;">รายการตรวจสำคัญ:</div>
+<div style="min-height: 105px;">{tests_html}</div>
+<div style="display: flex; justify-content: flex-end; align-items: baseline; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #F1F5F9;">
+<span style="background: {group['header_bg']}15; color: {group['header_bg']}; font-size: 0.7rem; font-weight: 700; padding: 2px 7px; border-radius: 5px;">ราคา</span>
+<span style="font-family:'IBM Plex Mono',monospace; font-size: 1.22rem; font-weight: 800; color: {group['text_accent']};">{sub['price_display']}</span>
+</div>
+</div>"""
+                    render_custom_html(card_html)
 
-                    if addon_total > 0:
-                        st.markdown(f"**ยอดรวม Add-ons เพิ่มเติม:** ฿ {addon_total:,}")
+                    btn_title = f"เลือก {sub['short_name']}"
+                    if is_best_sub:
+                        btn_title = f"⭐ เลือก {sub['short_name']} (แนะนำ)"
 
-    # =============================================================
-    # Brochure Hospital Highlights Footer (จุดเด่นของโรงพยาบาลในโบรชัวร์)
-    # =============================================================
-    st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
-    st.markdown("""
-    <div style="background: white; border: 1px solid #E2E8F0; border-radius: 16px; padding: 20px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.03); margin-bottom: 24px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 1.8rem; background: #E6F4EA; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">👨‍⚕️</div>
-                <div>
-                    <div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">ดูแลโดยทีมแพทย์</div>
-                    <div style="font-size: 0.78rem; color: #64748B;">ผู้เชี่ยวชาญเฉพาะทาง</div>
-                </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 1.8rem; background: #E0F2FE; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">📋</div>
-                <div>
-                    <div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">เครื่องมือทันสมัย</div>
-                    <div style="font-size: 0.78rem; color: #64748B;">ได้มาตรฐานสากล</div>
-                </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 1.8rem; background: #FEF3C7; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">💙</div>
-                <div>
-                    <div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">รู้ผลรวดเร็ว</div>
-                    <div style="font-size: 0.78rem; color: #64748B;">พร้อมคำแนะนำการดูแล</div>
-                </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 1.8rem; background: #F3E8FF; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">👥</div>
-                <div>
-                    <div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">เหมาะกับทุกช่วงวัย</div>
-                    <div style="font-size: 0.78rem; color: #64748B;">และทุกความต้องการ</div>
-                </div>
-            </div>
-        </div>
-        <hr style="border: none; border-top: 1px solid #F1F5F9; margin: 16px 0 12px 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 0.82rem; color: #64748B;">
-            <div>
-                <strong style="color: #0E5C56;">“สุขภาพดี...เริ่มต้นได้ที่ วิชัยเวชฯ อ้อมน้อย”</strong>
-            </div>
-            <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
-                <span>📞 โทร 02-441-7899</span>
-                <span>🌐 www.vichaivej-omnoi.com</span>
-                <span>💬 LINE: @vichaivej-omnoi</span>
-                <span style="color: #E11D48; font-weight: 600;">ดูแลคุณ...ด้วยหัวใจ ❤️</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+                    if st.button(btn_title, key=f"btn_sub_{level_key}_{sub_idx}_{sel_pid}", use_container_width=True):
+                        st.session_state["chosen_pkg"] = level_key
+                        st.session_state["chosen_sub_pkg"] = sub["name"]
+                        st.session_state["chosen_sub_price"] = sub["price"]
+                        st.toast(f"✅ เลือก {sub['name']} เรียบร้อยแล้ว")
 
-    # =============================================================
-    # AI Clinical Insights & Consultation Summary Section
-    # =============================================================
-    st.markdown('<div class="panel-title" style="font-size: 1.15rem;">🧠 สรุปการวิเคราะห์เชิงรุกโดย AI Health Data Architect</div>', unsafe_allow_html=True)
+                # Popovers
+                if level_key == 1:
+                    with st.popover("🔍 เปรียบเทียบ Basic vs Standard vs Premium", use_container_width=True):
+                        st.markdown("#### 📋 การเปรียบเทียบแพ็กเกจกลุ่ม 1 (ตรวจสุขภาพทั่วไป)")
+                        st.caption(f"ผู้รับบริการ HN: {sel_pid} (อายุ {age:.0f} ปี)")
+                        st.markdown("""
+                        - **BASIC (990.-):** เหมาะกับผู้มีอายุน้อย แข็งแรง ตรวจปัสสาวะ เลือดพื้นฐาน และเอกซเรย์ปอด
+                        - **STANDARD (2,290.-):** เพิ่มตรวจเลือดครบชุด ตรวจคลื่นไฟฟ้าหัวใจ EKG และอัลตราซาวด์ช่องท้องส่วนบน
+                        - **PREMIUM (4,990.-):** ตรวจครบสูตรทั้ง EKG และอัลตราซาวด์ช่องท้องทั้งส่วนบนและส่วนล่าง
+                        """)
 
-    c_left, c_right = st.columns([1.8, 1.2])
+                elif level_key == 2:
+                    with st.popover("🩸 ดูรายละเอียดค่า HbA1c และไขมันเชิงลึก", use_container_width=True):
+                        st.markdown("#### 🔬 ผลวิเคราะห์เจาะลึก HbA1c & Lipid Profile")
+                        st.caption(f"ประเมินสำหรับผู้รับบริการ HN: {sel_pid} (อิงเกณฑ์เวชศาสตร์ป้องกัน)")
 
-    with c_left:
-        reasons_html_list = "".join([f"<li style='margin-bottom:4px;'>{r}</li>" for r in risk_reasons])
-        target_pkg_name = HEALTH_PACKAGES_4LEVEL[assigned_tier]["name"]
+                        hba1c_est = 5.4 + (bmi - 22.0) * 0.12 if bmi > 22.0 else 5.2
+                        chol_est = 180 + (bmi - 22.0) * 3.5 + (systolic - 120) * 0.4
+                        tg_est = 120 + (bmi - 22.0) * 5.0
+                        hdl_est = max(35.0, 55.0 - (bmi - 22.0) * 1.2)
+                        ldl_est = chol_est - hdl_est - (tg_est / 5.0)
 
-        st.markdown(f"""
-        <div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); height: 100%;">
-            <div style="font-size: 0.9rem; font-weight: 700; color: #0E5C56; display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                <span>📋</span> Clinical Decision Support Summary (ผลการประเมินบริบทรายบุคคล)
-            </div>
-            <div style="font-size: 0.85rem; color: #334155; line-height: 1.7;">
-                จากการประมวลผลข้อมูลประชากร ประวัติการรักษา ความดันโลหิต และผลแล็บของผู้รับบริการ HN <strong>{sel_pid}</strong><br>
-                ระบบ AI Health Data Architect แนะนำจัดกลุ่มใน <strong>{tier_label}</strong><br>
-                และระบุแพ็กเกจย่อยที่ตรงจุดคุ้มค่าที่สุดคือ <span style="background:#FEF3C7; color:#B45309; padding:2px 8px; border-radius:6px; font-weight:700;">⭐ {best_match_sub_pkg}</span>
-            </div>
-            <div style="font-size: 0.82rem; font-weight: 700; color: #0F172A; margin-top: 12px; margin-bottom: 6px;">
-                🔍 ปัจจัยเสี่ยงและข้อบ่งชี้ทางคลินิกที่ตรวจพบ:
-            </div>
-            <ul style="font-size: 0.8rem; color: #475569; padding-left: 20px; margin-bottom: 12px;">
-                {reasons_html_list}
-            </ul>
-            <div style="background: #F0FDF4; border-radius: 10px; padding: 10px 14px; border: 1px solid #BBF7D0; font-size: 0.8rem; color: #166534;">
-                💡 <strong>ข้อเสนอแนะในการดูแล:</strong> ควรนัดหมายเข้ารับการตรวจสุขภาพประจำปีตามแพ็กเกจที่จับคู่ พร้อมรับคำปรึกษาจากแพทย์ผู้เชี่ยวชาญเฉพาะทางโรงพยาบาลวิชัยเวชฯ อ้อมน้อย
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+                        c_hba1c = "#DC2626" if hba1c_est >= 6.5 else ("#D97706" if hba1c_est >= 5.7 else "#16A34A")
+                        s_hba1c = "เบาหวาน (Diabetes)" if hba1c_est >= 6.5 else ("เสี่ยงเบาหวาน (Pre-DM)" if hba1c_est >= 5.7 else "ปกติ (<5.7%)")
 
-    with c_right:
-        st.markdown("""
-        <div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); height: 100%;">
-            <div style="font-size: 0.9rem; font-weight: 700; color: #0F172A; margin-bottom: 12px;">
-                ⚡ แผนงานส่งต่อและสรุปข้อเสนอ (Proposal Actions)
-            </div>
-        """, unsafe_allow_html=True)
+                        c_ldl = "#DC2626" if ldl_est >= 160 else ("#D97706" if ldl_est >= 130 else "#16A34A")
+                        s_ldl = "สูงผิดปกติ (High)" if ldl_est >= 160 else ("ปริ่มสูง (Borderline)" if ldl_est >= 130 else "เหมาะสม (Optimal)")
 
-        chosen_level = st.session_state.get("chosen_pkg", assigned_tier)
-        chosen_info = HEALTH_PACKAGES_4LEVEL[chosen_level]
-        chosen_sub_name = st.session_state.get("chosen_sub_pkg", best_match_sub_pkg)
-        chosen_price = st.session_state.get("chosen_sub_price", chosen_info["price"])
+                        table_html = f"""<table style="width:100%; font-size:0.8rem; border-collapse:collapse; margin-top:8px;">
+<tr style="background:#F8FAFC; border-bottom:1px solid #E2E8F0;">
+<th style="padding:6px; text-align:left;">รายการตรวจ (Lab Test)</th>
+<th style="padding:6px; text-align:right;">ค่าตรวจ</th>
+<th style="padding:6px; text-align:right;">ค่าเป้าหมาย</th>
+<th style="padding:6px; text-align:center;">การแปลผล</th>
+</tr>
+<tr style="border-bottom:1px solid #F1F5F9;">
+<td style="padding:6px;"><strong>HbA1c</strong> (น้ำตาลสะสม)</td>
+<td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:{c_hba1c};">{hba1c_est:.1f}%</td>
+<td style="padding:6px; text-align:right; color:#64748B;">&lt; 5.7%</td>
+<td style="padding:6px; text-align:center;"><span style="color:{c_hba1c}; font-weight:600;">{s_hba1c}</span></td>
+</tr>
+<tr style="border-bottom:1px solid #F1F5F9;">
+<td style="padding:6px;"><strong>Total Cholesterol</strong></td>
+<td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace;">{chol_est:.0f} mg/dL</td>
+<td style="padding:6px; text-align:right; color:#64748B;">&lt; 200</td>
+<td style="padding:6px; text-align:center;">{'⚠️ สูง' if chol_est>=200 else '✅ ปกติ'}</td>
+</tr>
+<tr style="border-bottom:1px solid #F1F5F9;">
+<td style="padding:6px;"><strong>Triglycerides</strong></td>
+<td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace;">{tg_est:.0f} mg/dL</td>
+<td style="padding:6px; text-align:right; color:#64748B;">&lt; 150</td>
+<td style="padding:6px; text-align:center;">{'⚠️ สูง' if tg_est>=150 else '✅ ปกติ'}</td>
+</tr>
+<tr style="border-bottom:1px solid #F1F5F9;">
+<td style="padding:6px;"><strong>LDL-C</strong></td>
+<td style="padding:6px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:700; color:{c_ldl};">{ldl_est:.0f} mg/dL</td>
+<td style="padding:6px; text-align:right; color:#64748B;">&lt; 130</td>
+<td style="padding:6px; text-align:center;"><span style="color:{c_ldl}; font-weight:600;">{s_ldl}</span></td>
+</tr>
+</table>"""
+                        render_custom_html(table_html)
 
-        st.markdown(f"""
-            <div style="font-size: 0.82rem; color: #64748B; margin-bottom: 4px;">กลุ่มแพ็กเกจหลักที่เลือก:</div>
-            <div style="font-size: 1.05rem; font-weight: 700; color: {chosen_info['header_bg']};">
-                {chosen_info['name']}
-            </div>
-            <div style="font-size: 0.82rem; color: #64748B; margin-top: 10px; margin-bottom: 2px;">แพ็กเกจย่อยที่ระบุ:</div>
-            <div style="font-size: 1rem; font-weight: 800; color: #0F172A;">
-                {chosen_sub_name}
-            </div>
-            <div style="font-family:'IBM Plex Mono',monospace; font-weight: 800; color: #0E5C56; font-size: 1.25rem; margin: 8px 0 16px 0;">
-                ราคาประเมิน: ฿ {chosen_price:,}
-            </div>
-        """, unsafe_allow_html=True)
+                elif level_key == 3:
+                    with st.popover("📈 ดูกราฟแนวโน้ม (Trend Analysis) ค่าไต & ตับ", use_container_width=True):
+                        st.markdown("#### 📊 แนวโน้มผลตรวจย้อนหลัง 3 ปี (2024 - 2026)")
+                        st.caption(f"ประเมินฟังก์ชันการทำงานของอวัยวะสำคัญสำหรับ HN: {sel_pid}")
 
-        # Download proposal summary text
-        export_lines = [
-            "===========================================================",
-            "     PERSONALIZED HEALTH CHECKUP PROPOSAL",
-            "     VICHAIVEJ INTERNATIONAL HOSPITAL OMNOI",
-            "   Health Data Architect - 4-Level Care Model",
-            "===========================================================",
-            f"Patient HN: {sel_pid}",
-            f"Age: {age:.0f} | Gender: {gender}",
-            f"BMI: {bmi:.1f} kg/m² | Waist: {waist_cm:.1f} cm",
-            f"Blood Pressure: {systolic:.0f}/{diastolic:.0f} mmHg",
-            f"Annual Checkup Status: {checkup_status}",
-            "",
-            f"Assigned Risk Tier: {tier_label}",
-            f"AI Recommended Sub-package: {best_match_sub_pkg}",
-            f"Selected Sub-package: {chosen_sub_name} (฿{chosen_price:,})",
-            "",
-            "Clinical Risk Indicators & Rationale:"
-        ] + [f"- {r}" for r in risk_reasons] + [
-            "",
-            "Package Level Overview:"
-        ] + [f"• {t}" for t in chosen_info['tests']] + [
-            "",
-            "Contact: 02-441-7899 | www.vichaivej-omnoi.com",
-            "LINE: @vichaivej-omnoi",
-            "Generated by: AI Health Data Architect Protocol",
-            "==========================================================="
-        ]
-        export_text = "\n".join(export_lines)
+                        trend_tab1, trend_tab2 = st.tabs(["🫘 ค่าไต (Kidney Function)", "🩺 ค่าตับ (Liver Function)"])
+                        years = ["2024", "2025", "2026 (ล่าสุด)"]
+                        kidney_egfr = [92.0 - (age * 0.1), 86.0 - (age * 0.15) - (1 if systolic > 135 else 0), 79.0 - (age * 0.2) - (4 if systolic > 140 else 0)]
+                        kidney_cr = [0.85, 0.96, 1.12 if systolic > 140 else 1.02]
 
-        st.download_button(
-            label="📄 ดาวน์โหลดข้อเสนอตรวจสุขภาพ (Proposal TXT)",
-            data=export_text.encode("utf-8"),
-            file_name=f"health_package_proposal_{sel_pid}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
+                        with trend_tab1:
+                            fig_kidney = go.Figure()
+                            fig_kidney.add_trace(go.Scatter(
+                                x=years, y=kidney_egfr, mode="lines+markers", name="eGFR (อัตราการกรองไต)",
+                                line=dict(color="#0284C7", width=3), marker=dict(size=8)
+                            ))
+                            fig_kidney.add_trace(go.Scatter(
+                                x=years, y=kidney_cr, mode="lines+markers", name="Creatinine (mg/dL)", yaxis="y2",
+                                line=dict(color="#EA580C", width=3, dash="dot"), marker=dict(size=8)
+                            ))
+                            fig_kidney.add_hline(y=60, line_dash="dash", line_color="#DC2626", annotation_text="เกณฑ์ไตเสื่อม (<60)", annotation_position="bottom right")
+                            fig_kidney.update_layout(
+                                title="แนวโน้ม eGFR & Creatinine",
+                                height=240, margin=dict(l=10, r=10, t=30, b=10),
+                                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                                yaxis=dict(title="eGFR (mL/min)", gridcolor="#F1F5F9"),
+                                yaxis2=dict(title="Creatinine", overlaying="y", side="right", showgrid=False),
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                            )
+                            st.plotly_chart(fig_kidney, use_container_width=True)
 
-        if st.button("📲 ส่งข้อเสนอให้ผู้รับบริการผ่าน LINE OA (Mockup)", use_container_width=True):
-            st.success(f"✅ ส่งข้อเสนอ '{chosen_sub_name}' เข้า LINE OA สำเร็จ!")
+                        with trend_tab2:
+                            liver_sgpt = [22 + (bmi - 20) * 1.5, 30 + (bmi - 20) * 2.0, 42 + (bmi - 20) * 2.8]
+                            liver_sgot = [20 + (bmi - 20) * 1.2, 26 + (bmi - 20) * 1.6, 35 + (bmi - 20) * 2.2]
 
-        st.markdown("</div>", unsafe_allow_html=True)
+                            fig_liver = go.Figure()
+                            fig_liver.add_trace(go.Scatter(
+                                x=years, y=liver_sgpt, mode="lines+markers", name="SGPT/ALT (ตับอักเสบ)",
+                                line=dict(color="#DC2626", width=3), marker=dict(size=8)
+                            ))
+                            fig_liver.add_trace(go.Scatter(
+                                x=years, y=liver_sgot, mode="lines+markers", name="SGOT/AST",
+                                line=dict(color="#F59E0B", width=3), marker=dict(size=8)
+                            ))
+                            fig_liver.add_hline(y=40, line_dash="dash", line_color="#EA580C", annotation_text="ขีดบนปกติ (40 U/L)", annotation_position="top left")
+                            fig_liver.update_layout(
+                                title="แนวโน้มเอนไซม์ตับ (Liver Enzymes)",
+                                height=240, margin=dict(l=10, r=10, t=30, b=10),
+                                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                                yaxis=dict(title="U/L", gridcolor="#F1F5F9"),
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02)
+                            )
+                            st.plotly_chart(fig_liver, use_container_width=True)
+
+                elif level_key == 4:
+                    with st.popover("🔬 เลือกรายการตรวจเฉพาะทางเพิ่มเติม (Add-ons)", use_container_width=True):
+                        st.markdown("#### 🩺 ปรับแต่งรายการตรวจเฉพาะทางเชิงลึก")
+                        st.caption("เลือกการตรวจที่ตรงกับอาการทางคลินิกเพื่อส่งต่อแพทย์ผู้เชี่ยวชาญ")
+
+                        if "SPECIALIZED_DIAGNOSTIC_OPTIONS" in globals():
+                            diag_opts = SPECIALIZED_DIAGNOSTIC_OPTIONS
+                        else:
+                            diag_opts = {
+                                "ส่องกล้องระบบทางเดินอาหาร (EGD / Colonoscopy)": {"price": 7500, "desc": "คัดกรองแผลในกระเพาะอาหารและติ่งเนื้อมะเร็งลำไส้ใหญ่", "icon": "🔬"},
+                                "Low-Dose CT Chest (คัดกรองมะเร็งปอดรังสีต่ำ)": {"price": 4500, "desc": "ตรวจคัดกรองมะเร็งปอดระยะเริ่มต้น", "icon": "🫁"},
+                                "ชุดคัดกรองสารบ่งชี้มะเร็งรวม (CEA, AFP, CA-125, PSA)": {"price": 3500, "desc": "คัดกรองมะเร็งตับ ลำไส้ ต่อมลูกหมาก รังไข่", "icon": "🎗️"},
+                                "ตรวจคลื่นเสียงสะท้อนหัวใจ (Echocardiogram)": {"price": 3800, "desc": "ประเมินกล้ามเนื้อและลิ้นหัวใจอย่างละเอียด", "icon": "❤️"}
+                            }
+
+                        selected_addons = []
+                        addon_total = 0
+
+                        for opt_name, opt_meta in diag_opts.items():
+                            checked = st.checkbox(
+                                f"{opt_meta.get('icon', '🔬')} {opt_name} (+฿{opt_meta['price']:,})",
+                                key=f"chk_{sel_pid}_{opt_name}"
+                            )
+                            st.caption(f"↳ {opt_meta.get('desc', '')}")
+                            if checked:
+                                selected_addons.append((opt_name, opt_meta['price']))
+                                addon_total += opt_meta['price']
+
+                        if addon_total > 0:
+                            st.markdown(f"**ยอดรวม Add-ons เพิ่มเติม:** ฿ {addon_total:,}")
+
+        # Brochure Hospital Highlights Footer
+        st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
+        footer_html = """<div style="background: white; border: 1px solid #E2E8F0; border-radius: 16px; padding: 20px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.03); margin-bottom: 24px;">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+<div style="display: flex; align-items: center; gap: 12px;">
+<div style="font-size: 1.8rem; background: #E6F4EA; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">👨‍⚕️</div>
+<div>
+<div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">ดูแลโดยทีมแพทย์</div>
+<div style="font-size: 0.78rem; color: #64748B;">ผู้เชี่ยวชาญเฉพาะทาง</div>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px;">
+<div style="font-size: 1.8rem; background: #E0F2FE; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">📋</div>
+<div>
+<div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">เครื่องมือทันสมัย</div>
+<div style="font-size: 0.78rem; color: #64748B;">ได้มาตรฐานสากล</div>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px;">
+<div style="font-size: 1.8rem; background: #FEF3C7; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">💙</div>
+<div>
+<div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">รู้ผลรวดเร็ว</div>
+<div style="font-size: 0.78rem; color: #64748B;">พร้อมคำแนะนำการดูแล</div>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px;">
+<div style="font-size: 1.8rem; background: #F3E8FF; border-radius: 12px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">👥</div>
+<div>
+<div style="font-size: 0.88rem; font-weight: 700; color: #0F172A;">เหมาะกับทุกช่วงวัย</div>
+<div style="font-size: 0.78rem; color: #64748B;">และทุกความต้องการ</div>
+</div>
+</div>
+</div>
+<hr style="border: none; border-top: 1px solid #F1F5F9; margin: 16px 0 12px 0;">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 0.82rem; color: #64748B;">
+<div>
+<strong style="color: #0E5C56;">“สุขภาพดี...เริ่มต้นได้ที่ วิชัยเวชฯ อ้อมน้อย”</strong>
+</div>
+<div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+<span>📞 โทร 02-441-7899</span>
+<span>🌐 www.vichaivej-omnoi.com</span>
+<span>💬 LINE: @vichaivej-omnoi</span>
+<span style="color: #E11D48; font-weight: 600;">ดูแลคุณ...ด้วยหัวใจ ❤️</span>
+</div>
+</div>
+</div>"""
+        render_custom_html(footer_html)
+
+        # AI Clinical Insights & Consultation Summary Section
+        st.markdown('<div class="panel-title" style="font-size: 1.15rem;">🧠 สรุปการวิเคราะห์เชิงรุกโดย AI Health Data Architect</div>', unsafe_allow_html=True)
+
+        c_left, c_right = st.columns([1.8, 1.2])
+
+        with c_left:
+            reasons_html_list = "".join([f"<li style='margin-bottom:4px;'>{r}</li>" for r in risk_reasons])
+            target_pkg_name = HEALTH_PACKAGES_4LEVEL[assigned_tier]["name"]
+
+            summary_left_html = f"""<div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); height: 100%;">
+<div style="font-size: 0.9rem; font-weight: 700; color: #0E5C56; display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+<span>📋</span> Clinical Decision Support Summary (ผลการประเมินบริบทรายบุคคล)
+</div>
+<div style="font-size: 0.85rem; color: #334155; line-height: 1.7;">
+จากการประมวลผลข้อมูลประชากร ประวัติการรักษา ความดันโลหิต และผลแล็บของผู้รับบริการ HN <strong>{sel_pid}</strong><br>
+ระบบ AI Health Data Architect แนะนำจัดกลุ่มใน <strong>{tier_label}</strong><br>
+และระบุแพ็กเกจย่อยที่ตรงจุดคุ้มค่าที่สุดคือ <span style="background:#FEF3C7; color:#B45309; padding:2px 8px; border-radius:6px; font-weight:700;">⭐ {best_match_sub_pkg}</span>
+</div>
+<div style="font-size: 0.82rem; font-weight: 700; color: #0F172A; margin-top: 12px; margin-bottom: 6px;">
+🔍 ปัจจัยเสี่ยงและข้อบ่งชี้ทางคลินิกที่ตรวจพบ:
+</div>
+<ul style="font-size: 0.8rem; color: #475569; padding-left: 20px; margin-bottom: 12px;">
+{reasons_html_list}
+</ul>
+<div style="background: #F0FDF4; border-radius: 10px; padding: 10px 14px; border: 1px solid #BBF7D0; font-size: 0.8rem; color: #166534;">
+💡 <strong>ข้อเสนอแนะในการดูแล:</strong> ควรนัดหมายเข้ารับการตรวจสุขภาพประจำปีตามแพ็กเกจที่จับคู่ พร้อมรับคำปรึกษาจากแพทย์ผู้เชี่ยวชาญเฉพาะทางโรงพยาบาลวิชัยเวชฯ อ้อมน้อย
+</div>
+</div>"""
+            render_custom_html(summary_left_html)
+
+        with c_right:
+            chosen_level = st.session_state.get("chosen_pkg", assigned_tier)
+            chosen_info = HEALTH_PACKAGES_4LEVEL[chosen_level]
+            chosen_sub_name = st.session_state.get("chosen_sub_pkg", best_match_sub_pkg)
+            chosen_price = st.session_state.get("chosen_sub_price", chosen_info["price"])
+
+            summary_right_html = f"""<div style="background: white; border: 1px solid #E2E8F0; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); height: 100%;">
+<div style="font-size: 0.9rem; font-weight: 700; color: #0F172A; margin-bottom: 12px;">
+⚡ แผนงานส่งต่อและสรุปข้อเสนอ (Proposal Actions)
+</div>
+<div style="font-size: 0.82rem; color: #64748B; margin-bottom: 4px;">กลุ่มแพ็กเกจหลักที่เลือก:</div>
+<div style="font-size: 1.05rem; font-weight: 700; color: {chosen_info['header_bg']};">
+{chosen_info['name']}
+</div>
+<div style="font-size: 0.82rem; color: #64748B; margin-top: 10px; margin-bottom: 2px;">แพ็กเกจย่อยที่ระบุ:</div>
+<div style="font-size: 1rem; font-weight: 800; color: #0F172A;">
+{chosen_sub_name}
+</div>
+<div style="font-family:'IBM Plex Mono',monospace; font-weight: 800; color: #0E5C56; font-size: 1.25rem; margin: 8px 0 16px 0;">
+ราคาประเมิน: ฿ {chosen_price:,}
+</div>
+</div>"""
+            render_custom_html(summary_right_html)
+
+            # Download proposal summary text
+            export_lines = [
+                "===========================================================",
+                "     PERSONALIZED HEALTH CHECKUP PROPOSAL",
+                "     VICHAIVEJ INTERNATIONAL HOSPITAL OMNOI",
+                "   Health Data Architect - 4-Level Care Model",
+                "===========================================================",
+                f"Patient HN: {sel_pid}",
+                f"Age: {age:.0f} | Gender: {gender}",
+                f"BMI: {bmi:.1f} kg/m² | Waist: {waist_cm:.1f} cm",
+                f"Blood Pressure: {systolic:.0f}/{diastolic:.0f} mmHg",
+                f"Annual Checkup Status: {checkup_status}",
+                "",
+                f"Assigned Risk Tier: {tier_label}",
+                f"AI Recommended Sub-package: {best_match_sub_pkg}",
+                f"Selected Sub-package: {chosen_sub_name} (฿{chosen_price:,})",
+                "",
+                "Clinical Risk Indicators & Rationale:"
+            ] + [f"- {r}" for r in risk_reasons] + [
+                "",
+                "Package Level Overview:"
+            ] + [f"• {t}" for t in chosen_info['tests']] + [
+                "",
+                "Contact: 02-441-7899 | www.vichaivej-omnoi.com",
+                "LINE: @vichaivej-omnoi",
+                "Generated by: AI Health Data Architect Protocol",
+                "==========================================================="
+            ]
+            export_text = "\n".join(export_lines)
+
+            st.download_button(
+                label="📄 ดาวน์โหลดข้อเสนอตรวจสุขภาพ (Proposal TXT)",
+                data=export_text.encode("utf-8"),
+                file_name=f"health_package_proposal_{sel_pid}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+            if st.button("📲 ส่งข้อเสนอให้ผู้รับบริการผ่าน LINE OA (Mockup)", use_container_width=True):
+                st.success(f"✅ ส่งข้อเสนอ '{chosen_sub_name}' เข้า LINE OA สำเร็จ!")
 
 
 # ============================================================
