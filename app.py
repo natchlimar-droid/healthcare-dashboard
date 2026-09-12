@@ -295,15 +295,15 @@ div[data-testid="stMetricLabel"] {{
     border: 1.5px solid {TEAL} !important; border-radius: 10px !important; font-weight: 600 !important; }}
 
 /* --- 4-Level Package Grid Styling --- */
-.pkg-header-hero {
+.pkg-header-hero {{
     background: linear-gradient(135deg, #0B1B2B 0%, #0E5C56 100%);
     border-radius: 16px;
     padding: 22px 24px;
     color: white;
     margin-bottom: 20px;
     box-shadow: 0 4px 20px rgba(11,27,43,0.12);
-}
-.pkg-card-box {
+}}
+.pkg-card-box {{
     border-radius: 16px;
     padding: 18px 16px;
     transition: all 0.25s ease;
@@ -312,12 +312,12 @@ div[data-testid="stMetricLabel"] {{
     justify-content: space-between;
     height: 100%;
     box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-}
-.pkg-card-box:hover {
+}}
+.pkg-card-box:hover {{
     transform: translateY(-3px);
     box-shadow: 0 6px 18px rgba(0,0,0,0.09);
-}
-.pkg-pill-match {
+}}
+.pkg-pill-match {{
     background: linear-gradient(135deg, #0E5C56, #16A34A);
     color: white;
     font-size: 0.72rem;
@@ -329,34 +329,34 @@ div[data-testid="stMetricLabel"] {{
     gap: 4px;
     margin-bottom: 8px;
     box-shadow: 0 2px 6px rgba(14,92,86,0.3);
-}
-.metric-tile {
+}}
+.metric-tile {{
     background: white;
     border: 1px solid #E2E8F0;
     border-radius: 12px;
     padding: 12px 14px;
     box-shadow: 0 2px 6px rgba(0,0,0,0.03);
-}
-.metric-tile-title {
+}}
+.metric-tile-title {{
     font-size: 0.72rem;
     font-weight: 600;
     color: #64748B;
     margin-bottom: 2px;
-}
-.metric-tile-val {
+}}
+.metric-tile-val {{
     font-family: 'IBM Plex Mono', monospace;
     font-size: 1.25rem;
     font-weight: 700;
     color: #0F172A;
-}
-.metric-tile-badge {
+}}
+.metric-tile-badge {{
     font-size: 0.68rem;
     font-weight: 600;
     padding: 2px 6px;
     border-radius: 6px;
     display: inline-block;
     margin-top: 2px;
-}
+}}
 
 </style>
 """, unsafe_allow_html=True)
