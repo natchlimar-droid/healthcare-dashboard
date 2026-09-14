@@ -1,0 +1,29 @@
+# ไฟล์ข้อมูลดิบขนาดใหญ่และข้อมูลส่วนบุคคล (PDPA) - ไม่ต้อง push ขึ้น GitHub
+A9448300.xlsx
+Datavisit_*.xlsx
+visits_with_patient_id.*
+duplicate_visit_id*.xlsx
+hn_not_found.xlsx
+patient_mapping.xlsx
+~$*.xlsx
+
+# ไฟล์ Excel ขนาดใหญ่ที่ซ้ำกับ CSV/ZIP (ประหยัดโควตา GitHub)
+visits_with_monthly_count.xlsx
+visits_with_monthly_count.csv
+visits_cleaned.xlsx
+visits_cleaned.csv
+monthly_visit_summary.xlsx
+monthly_visit_summary.csv
+
+# โฟลเดอร์เก็บโค้ดเก่าและ Patch ทดลอง
+archive/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# OS
+.DS_Store
+Thumbs.db

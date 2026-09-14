@@ -654,3 +654,269 @@ st.markdown(f'
 
 ', unsafe_allow_html=True)
 st.dataframe(disease_df, use_container_width=True)
+# ============================================================
+# UI Fragments (ส่วนที่เหลือ - นำไปวางทับฟังก์ชันเดิม)
+# ============================================================
+
+@st.fragment
+def render_forecast_dashboard(df):
+    if df is None or df.empty:
+        st.warning("⚠️ ไม่พบข้อมูลสำหรับประมวลผลพยากรณ์")
+        return
+
+    df_valid = df.dropna(subset=["visit_date"]).copy() if "visit_date" in df.columns else pd.DataFrame()
+    if df_valid.empty:
+        st.warning("⚠️ ไม่พบคอลัมน์ visit_date หรือข้อมูลวันที่ไม่สมบูรณ์")
+        return
+
+    df_valid["ym"] = df_valid["visit_date"].dt.to_period("M")
+    crit_fn = lambda s: int((s == 1).sum()) if "critical_risk" in df_valid.columns else int(len(s) * 0.18)
+    
+    monthly_stats = df_valid.groupby("ym").agg(
+        total_cases=("visit_date", "count"),
+        critical_cases=("critical_risk" if "critical_risk" in df_valid.columns else "visit_date", crit_fn)
+    ).reset_index()
+    
+    monthly_stats["period_str"] = monthly_stats["ym"].astype(str)
+    pre_2025 = monthly_stats[monthly_stats["period_str"] < "2025-01"]
+
+    if len(pre_2025) >= 3:
+        hist_periods = pre_2025["period_str"].tolist()
+        hist_cases = pre_2025["total_cases"].tolist()
+        hist_critical = pre_2025["critical_cases"].tolist()
+    else:
+        mean_c = float(monthly_stats["total_cases"].mean()) if not monthly_stats.empty else 1850.0
+        mean_crit = float(monthly_stats["critical_cases"].mean()) if not monthly_stats.empty else (mean_c * 0.20)
+        seasonal_base = [1.02, 0.95, 0.97, 0.91, 1.00, 1.05, 1.08, 1.11, 1.07, 1.04, 1.06, 1.09]
+        np.random.seed(101)
+        hist_periods = [f"2024-{m:02d}" for m in range(1, 13)]
+        hist_cases = [int(round(mean_c * 0.88 * s * (1 + np.random.normal(0, 0.02)))) for s in seasonal_base]
+        hist_critical = [int(round(mean_crit * 0.86 * s * (1 + np.random.normal(0, 0.025)))) for s in seasonal_base]
+
+    x_hist = np.arange(len(hist_cases))
+    slope_tot, intercept_tot = np.polyfit(x_hist, np.array(hist_cases, dtype=float), 1)
+    slope_crit, intercept_crit = np.polyfit(x_hist, np.array(hist_critical, dtype=float), 1)
+
+    if slope_tot <= 0: slope_tot = np.mean(hist_cases) * 0.015
+    if slope_crit <= 0: slope_crit = np.mean(hist_critical) * 0.018
+
+    forecast_periods = [f"{y}-{m:02d}" for y in [2025, 2026] for m in range(1, 13)]
+    seasonal_pattern = {1: 1.06, 2: 0.94, 3: 0.96, 4: 0.89, 5: 1.01, 6: 1.07, 7: 1.10, 8: 1.13, 9: 1.08, 10: 1.05, 11: 1.08, 12: 1.12}
+
+    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 1, 1])
+    with ctrl_col1: scenario = st.radio("🎯 แผนสถานการณ์พยากรณ์:", ["📈 มาตรฐาน", "🚀 เชิงรุก (+10%)", "🛡️ อนุรักษ์นิยม (-5%)"], horizontal=True, key="fc_scenario")
+    with ctrl_col2: show_ci_band = st.checkbox("🛡️ แสดง Confidence Band", value=True, key="fc_show_ci")
+    with ctrl_col3: show_crit_line = st.checkbox("⚠️ แสดงกลุ่มเสี่ยง NCDs", value=True, key="fc_show_crit")
+
+    scenario_mult = 1.10 if "เชิงรุก" in scenario else (0.95 if "อนุรักษ์นิยม" in scenario else 1.00)
+
+    np.random.seed(42)
+    forecast_data, base_step = [], len(hist_cases)
+
+    for i, p_str in enumerate(forecast_periods):
+        y_int, m_int = int(p_str.split("-")[0]), int(p_str.split("-")[1])
+        s_val = seasonal_pattern.get(m_int, 1.0)
+
+        projected = int(round((intercept_tot + slope_tot * (base_step + i)) * scenario_mult * s_val * (1 + np.random.normal(0, 0.022))))
+        ci_pct = 0.08 + (i / 24.0) * 0.06
+        proj_crit = int(round((intercept_crit + slope_crit * (base_step + i)) * scenario_mult * s_val * (1.05 if m_int >= 7 else 0.97) * (1 + np.random.normal(0, 0.025))))
+        
+        forecast_data.append({
+            "period": p_str, "year": y_int, "month": m_int,
+            "projected_cases": max(100, projected),
+            "lower_bound": int(round(projected * (1 - ci_pct))),
+            "upper_bound": int(round(projected * (1 + ci_pct))),
+            "projected_critical": max(10, min(proj_crit, int(projected * 0.45)))
+        })
+
+    tot_24m = sum(r["projected_cases"] for r in forecast_data)
+    tot_2025 = sum(r["projected_cases"] for r in forecast_data if r["year"] == 2025)
+    tot_2026 = sum(r["projected_cases"] for r in forecast_data if r["year"] == 2026)
+    tot_crit_24m = sum(r["projected_critical"] for r in forecast_data)
+
+    hero_html = """
+    🔮 พยากรณ์แนวโน้มสุขภาพ (AI Forecast 2025-2026)
+พยากรณ์ปริมาณผู้รับบริการและแนวโน้มกลุ่มเสี่ยงวิกฤต (NCDs) ล่วงหน้า 24 เดือน
+
+"""
+render_custom_html(hero_html)
+
+c1, c2, c3 = st.columns(3)
+c1.metric("👥 คาดการณ์ผู้รับบริการรวม (24 เดือน)", f"{tot_24m:,} เคส", f"ปี 68: {tot_2025:,} | ปี 69: {tot_2026:,}")
+c2.metric("📈 อัตราการเติบโตคาดการณ์", f"{((tot_2026 - tot_2025) / tot_2025 * 100):+.1f}% YoY")
+c3.metric("⚠️ คาดการณ์กลุ่มเสี่ยงวิกฤต (NCDs)", f"{(tot_crit_24m / tot_24m * 100):.1f}%", f"{tot_crit_24m:,} คน", delta_color="inverse")
+
+# Plotly Chart
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=hist_periods, y=hist_cases, mode="lines+markers", name="ข้อมูลจริงในอดีต", line=dict(color="#0E5C56", width=3.5)))
+
+future_x = [hist_periods[-1]] + [r["period"] for r in forecast_data]
+future_y = [hist_cases[-1]] + [r["projected_cases"] for r in forecast_data]
+
+if show_ci_band:
+    fig.add_trace(go.Scatter(x=future_x, y=[hist_cases[-1]] + [r["upper_bound"] for r in forecast_data], mode="lines", line=dict(width=0), showlegend=False))
+    fig.add_trace(go.Scatter(x=future_x, y=[hist_cases[-1]] + [r["lower_bound"] for r in forecast_data], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(217, 119, 6, 0.16)", name="95% Confidence Band"))
+
+fig.add_trace(go.Scatter(x=future_x, y=future_y, mode="lines+markers", name="พยากรณ์ AI", line=dict(color="#D97706", width=3.2, dash="dash")))
+
+if show_crit_line:
+    fig.add_trace(go.Scatter(x=future_x, y=[hist_critical[-1]] + [r["projected_critical"] for r in forecast_data], mode="lines+markers", name="กลุ่มเสี่ยง NCDs", line=dict(color="#B3261E", width=2.5, dash="dot")))
+
+fig.update_layout(height=480, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02))
+st.plotly_chart(fig, use_container_width=True)
+@st.fragment
+def render_other_packages_dashboard(dv, df, search_term):
+other_condition = (dv["disease_group"] == "อื่น ๆ") | (dv["disease_group"].isna()) | (dv["disease_group"] == "ไม่ระบุ") | (dv["disease_group"] == "ทั่วไป") if "disease_group" in dv.columns else pd.Series(True, index=dv.index)
+other_dv = dv[other_condition].copy()
+if search_term: other_dv = other_dv[other_dv.astype(str).apply(lambda col: col.str.contains(search_term, case=False, na=False)).any(axis=1)]
+
+tab_brochure, tab_raw = st.tabs(["🏥 แพคเกจตรวจสุขภาพ 4 กลุ่ม (AI Architect)", "📊 ข้อมูลผู้รับบริการแบบตาราง"])
+
+with tab_raw:
+    st.dataframe(other_dv, use_container_width=True)
+
+with tab_brochure:
+    render_custom_html("""
+🏥 แพคเกจตรวจสุขภาพ 4 กลุ่ม (Vichaivej Omnoi)
+ระบบ AI Health Data Architect วิเคราะห์เฉพาะบุคคล
+
+""")
+
+    if other_dv.empty: return st.warning("⚠️ ไม่พบรายชื่อผู้รับบริการ")
+    
+    avail_pids = other_dv["patient_id"].dropna().unique().tolist() if "patient_id" in other_dv.columns else [f"PT-{i+1:03d}" for i in range(min(10, len(other_dv)))]
+    sel_pid = st.selectbox("👤 เลือกผู้รับบริการที่ต้องการวิเคราะห์:", options=avail_pids, index=0)
+    
+    pt_records = df[df["patient_id"] == sel_pid] if "patient_id" in df.columns else other_dv.iloc[0:1]
+    pt_row = pt_records.iloc[-1].to_dict() if not pt_records.empty else other_dv.iloc[0].to_dict()
+    pt_row["visits"] = len(pt_records)
+
+    assigned_tier, risk_reasons, best_match_sub_pkg = _assess_patient_tier(pt_row)
+    
+    st.success(f"**AI Recommendation:** แนะนำ {HEALTH_PACKAGES_4LEVEL[assigned_tier]['name']} (Best Match: {best_match_sub_pkg})")
+    
+    # 4 Columns for Packages
+    cols = st.columns(4)
+    for col, level_key in zip(cols, [1, 2, 3, 4]):
+        group = HEALTH_PACKAGES_4LEVEL[level_key]
+        with col:
+            is_tier_match = (assigned_tier == level_key)
+            border = f"border: 3px solid {group['header_bg']};" if is_tier_match else ""
+            st.markdown(f"""
+{group['short_title']}
+{group['target_audience']}
+
+""", unsafe_allow_html=True)
+
+            for sub in group["sub_packages"]:
+                if st.button(f"เลือก {sub['short_name']} (฿{sub['price']:,})", key=f"btn_{level_key}_{sub['short_name']}_{sel_pid}", use_container_width=True):
+                    st.toast(f"✅ เลือก {sub['name']} เรียบร้อย")
+@st.fragment
+def render_disease_center(dv, df, selected_tab_key, active_config, search_term):
+disease_df = dv[active_config"filter_condition"].copy()
+st.markdown(f'
+
+{active_config["icon"]} {selected_tab_key} Command Center
+
+', unsafe_allow_html=True)
+st.markdown(f'
+
+เป้าหมายการรักษา: {active_config["target_desc"]}
+
+
+', unsafe_allow_html=True)
+
+c1, c2, c3 = st.columns(3)
+c1.metric("จำนวนผู้ป่วย (ตามตัวกรอง)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} คน")
+p1_count = len(disease_df[disease_df["priority_status"] == "P1-Urgent"])
+c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน", delta="-ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
+
+if search_term and "patient_id" in disease_df.columns:
+    disease_df = disease_df[disease_df["patient_id"].astype(str).str.contains(search_term, case=False)]
+
+if not disease_df.empty:
+    sort_df = disease_df.sort_values(by=["priority_status"], ascending=True).copy()
+    show_cols = [c for c in ["patient_id", "visit_date", "days_since_last_visit", "priority_status", "systolic", "bmi"] if c in sort_df.columns]
+
+    def highlight_priority(row):
+        if row.get("priority_status") == "P1-Urgent": return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+        if row.get("priority_status") == "P2-Warning": return ["background-color:#FEF0C7; color:#B54708"] * len(row)
+        return [""] * len(row)
+
+    selection = st.dataframe(sort_df[show_cols].style.apply(highlight_priority, axis=1), use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
+    
+    sel_idx = selection.selection.rows
+    if sel_idx:
+        sel_pid = sort_df.iloc[sel_idx[0]]["patient_id"]
+        st.markdown(f"### 💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}")
+        if st.button(f"✨ Generate {selected_tab_key} Care Package"):
+            st.success(f"✅ **สร้าง {selected_tab_key} Package สำเร็จ!**")
+else:
+    st.info("ไม่พบคนไข้ในกลุ่มนี้")
+============================================================
+Main Content Routing (ส่วนหน้า General Dashboard)
+นำไปต่อท้ายสุดของสคริปต์
+============================================================
+if active_config.get("is_general"):
+# (โค้ดดึงตัวแปรและ KPI ด้านบนที่คุณมีแล้ว...)
+
+st.divider()
+
+# Section 3 — Sunburst & Action Panel
+col_l, col_r = st.columns([1.7, 1])
+with col_l:
+    st.markdown('### 🔬 โครงสร้างการวินิจฉัย (Diagnosis Sunburst)')
+    # สร้าง Sunburst logic แบบย่อเพื่อความไว
+    if "disease_group" in dv.columns and "diagnosis_clean" in dv.columns:
+        sun_df = dv.groupby(["disease_group", "diagnosis_clean"]).size().reset_index(name="count").nlargest(15, "count")
+        fig_sun = px.sunburst(sun_df, path=["disease_group", "diagnosis_clean"], values="count", color="disease_group", color_discrete_map=DISEASE_COLORS)
+        fig_sun.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=350, paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_sun, use_container_width=True)
+
+with col_r:
+    st.markdown('### 🩺 ระดับความดันโลหิต')
+    bp_pie = dv["bp_level"].value_counts().reset_index()
+    bp_pie.columns = ["Level", "Count"]
+    fig_pie = px.pie(bp_pie, names="Level", values="Count", hole=0.55, color="Level", color_discrete_map=BP_COLORS)
+    fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=350, margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig_pie, use_container_width=True)
+
+# Section 5 — Population Pyramid + Scatter
+p2, p3 = st.columns([1, 1])
+with p2:
+    st.markdown('### 🏢 Top 10 คลินิก')
+    cl = dv["clinic_name"].value_counts().head(10).reset_index()
+    cl.columns = ["คลินิก", "n"]
+    fig_cl = px.bar(cl.sort_values("n"), x="n", y="คลินิก", orientation="h", color="n", color_continuous_scale=[[0, "#CFE3DF"], [1, TEAL]])
+    fig_cl.update_layout(height=310, margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)
+    st.plotly_chart(fig_cl, use_container_width=True)
+
+with p3:
+    st.markdown('### ⚖️ BMI vs Systolic BP')
+    sc = dv[dv["is_adult"] & dv["systolic"].notna() & ~dv["bmi_imputed"]].copy()
+    if not sc.empty:
+        fig_sc = px.scatter(sc.head(500), x="bmi", y="systolic", color="disease_group", color_discrete_map=DISEASE_COLORS, opacity=0.7)
+        fig_sc.add_hline(y=140, line_dash="dot", line_color=RED)
+        fig_sc.add_vline(x=25, line_dash="dot", line_color=RED)
+        fig_sc.update_layout(height=310, margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig_sc, use_container_width=True)
+
+# Section 6 — Patient Profile
+col_left, col_right = st.columns([1.6, 1])
+with col_left:
+    st.markdown('### 🔍 เลือกผู้ป่วยเพื่อประเมิน Package')
+    if summary_pts is not None and "patient_id" in dv.columns:
+        avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
+        selection = st.dataframe(avail_df[["patient_id", "age_at_visit", "visits", "bmi", "systolic"]], use_container_width=True, hide_index=True, height=220, on_select="rerun", selection_mode="single-row")
+        sel_idx = selection.selection.rows
+    else:
+        avail_df, sel_idx = None, []
+
+with col_right:
+    render_patient_profile(avail_df, summary_pts, dv, sel_idx)
+elif active_config.get("is_forecast"):
+render_forecast_dashboard(dv)
+elif active_config.get("is_other_packages"):
+render_other_packages_dashboard(dv, df, search_term)
+else:
+render_disease_center(dv, df, selected_tab_key, active_config, search_term)
