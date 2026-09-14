@@ -25,6 +25,8 @@ st.set_page_config(
 # ============================================================
 try:
     from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, recall_score
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
@@ -54,9 +56,9 @@ USE_AGGRID = False
 # ML Caching Functions
 # ============================================================
 @st.cache_resource(show_spinner=False)
-def get_business_forecast_model(df_hist):
+def get_business_forecast_model(df_hist, changepoint_prior_scale=0.05, seasonality_prior_scale=10.0):
     if not PROPHET_AVAILABLE or df_hist is None or df_hist.empty:
-        return None
+        return None, 0.0
     try:
         pdf = pd.DataFrame()
         if "ym" in df_hist.columns:
@@ -65,34 +67,69 @@ def get_business_forecast_model(df_hist):
             pdf["ds"] = pd.to_datetime(df_hist.index)
         pdf["y"] = df_hist["total_cases"].values if "total_cases" in df_hist.columns else df_hist.iloc[:, 1].values
         
-        m = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False)
+        m = Prophet(
+            yearly_seasonality=True, 
+            weekly_seasonality=False, 
+            daily_seasonality=False,
+            changepoint_prior_scale=changepoint_prior_scale,
+            seasonality_prior_scale=seasonality_prior_scale
+        )
         m.fit(pdf)
-        return m
+        
+        forecast = m.predict(pdf)
+        actual = pdf["y"].values
+        predicted = forecast["yhat"].values
+        non_zero = actual != 0
+        if non_zero.any():
+            mape = np.mean(np.abs((actual[non_zero] - predicted[non_zero]) / actual[non_zero])) * 100
+        else:
+            mape = 0.0
+            
+        return m, mape
     except Exception as e:
         st.error(f"Prophet Error: {e}")
-        return None
+        return None, 0.0
 
 @st.cache_resource(show_spinner=False)
-def get_upsell_risk_models(df_train):
-    if not XGB_SHAP_AVAILABLE or df_train is None or df_train.empty:
-        return None, None
+def get_upsell_risk_models(df_train, max_depth=6, learning_rate=0.3, n_estimators=100):
+    if not XGB_SHAP_AVAILABLE or not SKLEARN_AVAILABLE or df_train is None or df_train.empty:
+        return None, None, {}
     try:
         features = ["age_at_visit", "bmi", "systolic", "gender_code", "visits"]
         available_features = [f for f in features if f in df_train.columns]
         if not available_features or "target" not in df_train.columns:
-            return None, None
+            return None, None, {}
             
         X = df_train[available_features].fillna(0)
         y = df_train["target"].fillna(0)
         
-        model = xgb.XGBClassifier(eval_metric="logloss", use_label_encoder=False, random_state=42)
-        model.fit(X, y)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        model = xgb.XGBClassifier(
+            max_depth=max_depth,
+            learning_rate=learning_rate,
+            n_estimators=n_estimators,
+            eval_metric="logloss", 
+            use_label_encoder=False, 
+            random_state=42
+        )
+        model.fit(X_train, y_train)
+        
+        y_pred = model.predict(X_test)
+        y_prob = model.predict_proba(X_test)[:, 1] if len(np.unique(y_train)) > 1 else y_pred
+        
+        metrics = {
+            "accuracy": accuracy_score(y_test, y_pred) * 100,
+            "roc_auc": roc_auc_score(y_test, y_prob) * 100 if len(np.unique(y_test)) > 1 else 0.0,
+            "precision": precision_score(y_test, y_pred, zero_division=0) * 100,
+            "recall": recall_score(y_test, y_pred, zero_division=0) * 100
+        }
         
         explainer = shap.TreeExplainer(model)
-        return model, explainer
+        return model, explainer, metrics
     except Exception as e:
         st.error(f"XGBoost/SHAP Error: {e}")
-        return None, None
+        return None, None, {}
 
 # ============================================================
 # Design Tokens & Configurations
@@ -540,8 +577,23 @@ def render_patient_profile(avail_df, summary_pts, dv, sel_idx):
             st.markdown(f"**รวมประเมินราคา: ฿ {total_price:,.0f}**")
             
         with tab4:
-            xgb_model, explainer = get_upsell_risk_models(summary_pts)
+            with st.expander("⚙️ ปรับแต่งพารามิเตอร์ (XGBoost Tuning)"):
+                x_col1, x_col2, x_col3 = st.columns(3)
+                with x_col1:
+                    max_depth = st.slider("Max Depth", 1, 15, 6, 1)
+                with x_col2:
+                    lr = st.slider("Learning Rate", 0.01, 0.50, 0.30, 0.01)
+                with x_col3:
+                    n_est = st.slider("N Estimators", 50, 500, 100, 50)
+                    
+            xgb_model, explainer, metrics = get_upsell_risk_models(summary_pts, max_depth, lr, n_est)
             if xgb_model and explainer:
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Accuracy", f"{metrics.get('accuracy', 0):.1f}%")
+                m2.metric("ROC-AUC", f"{metrics.get('roc_auc', 0):.1f}%")
+                m3.metric("Precision", f"{metrics.get('precision', 0):.1f}%")
+                m4.metric("Recall", f"{metrics.get('recall', 0):.1f}%")
+                
                 features = ["age_at_visit", "bmi", "systolic", "gender_code", "visits"]
                 pt_df = pd.DataFrame([pt_data])[features].fillna(0)
                 
@@ -611,10 +663,17 @@ def render_forecast_dashboard(df):
     with ctrl_col3:
         show_crit_line = st.checkbox("⚠️ แสดงกลุ่มเสี่ยง NCDs", value=True, key="fc_show_crit")
 
+    with st.expander("⚙️ ปรับแต่งพารามิเตอร์ (Prophet Tuning)"):
+        p_col1, p_col2 = st.columns(2)
+        with p_col1:
+            cps = st.slider("Changepoint Prior Scale", min_value=0.001, max_value=0.5, value=0.05, step=0.01)
+        with p_col2:
+            sps = st.slider("Seasonality Prior Scale", min_value=0.01, max_value=20.0, value=10.0, step=0.5)
+
     scenario_mult = 1.10 if "เชิงรุก" in scenario else (0.95 if "อนุรักษ์นิยม" in scenario else 1.00)
     
     forecast_data = []
-    prophet_model = get_business_forecast_model(monthly_stats)
+    prophet_model, prophet_mape = get_business_forecast_model(monthly_stats, cps, sps)
     
     if prophet_model is not None:
         future_dates = pd.DataFrame({"ds": pd.to_datetime(forecast_periods)})
@@ -667,6 +726,8 @@ def render_forecast_dashboard(df):
     tot_crit_24m = sum(r["projected_critical"] for r in forecast_data)
 
     st.markdown("### 🔮 พยากรณ์แนวโน้มสุขภาพ (AI Forecast 2025-2026)")
+    if prophet_model is not None:
+        st.info(f"💡 ความน่าเชื่อถือของโมเดล: ความแม่นยำเฉลี่ย {100-prophet_mape:.1f}% (คลาดเคลื่อน ±{prophet_mape:.1f}%)")
     c1, c2, c3 = st.columns(3)
     c1.metric("👥 คาดการณ์ผู้รับบริการรวม (24 เดือน)", f"{tot_24m:,} เคส", f"ปี 68: {tot_2025:,} | ปี 69: {tot_2026:,}")
     c2.metric("📈 อัตราการเติบโตคาดการณ์", f"{((tot_2026 - tot_2025) / tot_2025 * 100):+.1f}% YoY")
