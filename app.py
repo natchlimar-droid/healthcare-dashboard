@@ -745,6 +745,34 @@ def render_forecast_dashboard(df):
         fig.add_trace(go.Scatter(x=future_x, y=[hist_critical[-1]] + [r["projected_critical"] for r in forecast_data], mode="lines+markers", name="กลุ่มเสี่ยง NCDs", line=dict(color="#B3261E", width=2.5, dash="dot")))
     fig.update_layout(height=480, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02))
     st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("---")
+    
+    st.markdown("#### 🎯 บทวิเคราะห์เชิงกลยุทธ์ (Strategic Recommendations)")
+    trend_desc = "เพิ่มขึ้น" if scenario_mult >= 1.0 else "ทรงตัว/ลดลง"
+    promo_focus = "เน้นการเจาะตลาดกลุ่มใหม่และแพคเกจครอบครัว" if scenario_mult >= 1.0 else "เน้นโปรโมชั่นรักษาฐานลูกค้าเก่า"
+    
+    t1, t2, t3 = st.tabs(["🎁 แผนโปรโมชั่น", "👨‍⚕️ การจัดอัตรากำลัง (Staff/Lab)", "🛡️ การดูแลเชิงป้องกัน"])
+    with t1:
+        st.info(f"**แนวโน้มผู้ป่วย{trend_desc}:** {promo_focus}\n\n- เสนอ **Health Checkup Add-on** สำหรับกลุ่มเสี่ยง\n- จัดแคมเปญกระตุ้นยอดในเดือน Low Season")
+    with t2:
+        st.warning(f"**เตรียมพร้อมรับมือ:**\n\n- คาดการณ์ผู้ป่วยเฉลี่ย **{int(tot_24m/24):,} เคส/เดือน**\n- จัดสรรพยาบาล/แพทย์ให้สอดคล้องกับช่วงพีค\n- ห้อง Lab ควรเตรียม Resource ให้เพียงพอต่อผู้ป่วย NCDs ({tot_crit_24m:,} คน)")
+    with t3:
+        st.success(f"**ลดอัตราผู้ป่วยวิกฤต:**\n\n- สัดส่วนกลุ่มเสี่ยงอยู่ที่ **{(tot_crit_24m / tot_24m * 100):.1f}%**\n- สร้างโปรแกรม NCDs Clinic เพื่อติดตามอาการ\n- จัดกิจกรรมให้ความรู้เชิงป้องกัน (Preventive Education)")
+
+    st.markdown("#### 📊 ตารางผลพยากรณ์")
+    fc_df = pd.DataFrame(forecast_data)
+    fc_df.columns = ["งวด (ปี-เดือน)", "ปี", "เดือน", "คาดการณ์ผู้ป่วยรวม", "ขอบเขตล่าง", "ขอบเขตบน", "กลุ่มเสี่ยงวิกฤต (NCDs)"]
+    st.dataframe(fc_df, use_container_width=True, hide_index=True)
+    
+    csv_data = fc_df.to_csv(index=False).encode('utf-8-sig')
+    st.download_button(
+        label="📥 ดาวน์โหลดผลพยากรณ์ (CSV)",
+        data=csv_data,
+        file_name="forecast_results.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
 
 @st.fragment
 def render_other_packages_dashboard(dv, df, search_term):
