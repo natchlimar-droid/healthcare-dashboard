@@ -425,146 +425,98 @@ def render_action_panel(dv):
     high_risk = dv[dv["critical_risk"] == 1]
     if "patient_id" in high_risk.columns:
         high_risk = high_risk[["patient_id", "disease_group", "bmi", "systolic", "diastolic"]].drop_duplicates("patient_id").sort_values(["systolic", "bmi"], ascending=False)
-    
+
     ac1, ac2 = st.columns(2)
     with ac1:
-        st.markdown('', unsafe_allow_html=True)
-gen = st.button("🔔 Alert List", use_container_width=True)
-st.markdown('
+        gen = st.button("🔔 Alert List", use_container_width=True)
+    with ac2:
+        sched = st.button("📅 Outreach", use_container_width=True)
 
-', unsafe_allow_html=True)
-with ac2:
-st.markdown('
+    if gen:
+        if not high_risk.empty:
+            st.success(f"✅ {len(high_risk)} รายการ")
+            st.download_button("📥 ดาวน์โหลด CSV", high_risk.to_csv(index=False).encode("utf-8-sig"), "alert_list.csv", "text/csv", use_container_width=True)
+        else:
+            st.info("ไม่มีกลุ่มเสี่ยงวิกฤต")
 
-', unsafe_allow_html=True)
-sched = st.button("📅 Outreach", use_container_width=True)
-st.markdown('
+    if "outreach_q" not in st.session_state:
+        st.session_state["outreach_q"] = []
+    if sched:
+        st.session_state["show_sched"] = True
+    if st.session_state.get("show_sched"):
+        with st.form("sched_form"):
+            ids = st.multiselect("เลือก Patient", high_risk["patient_id"].tolist() if not high_risk.empty else [])
+            d = st.date_input("วันที่นัด")
+            note = st.text_area("บันทึก")
+            if st.form_submit_button("ยืนยัน"):
+                st.session_state["outreach_q"].append({"วัน": str(d), "ราย": len(ids), "บันทึก": note})
+                st.session_state["show_sched"] = False
+                st.success(f"✅ กำหนดการ {len(ids)} ราย")
 
-', unsafe_allow_html=True)if gen:
-    if not high_risk.empty:
-        st.success(f"✅ {len(high_risk)} รายการ")
-        st.download_button("📥 ดาวน์โหลด CSV", high_risk.to_csv(index=False).encode("utf-8-sig"), "alert_list.csv", "text/csv", use_container_width=True)
-    else:
-        st.info("ไม่มีกลุ่มเสี่ยงวิกฤต")
+    return high_risk
 
-if "outreach_q" not in st.session_state: st.session_state["outreach_q"] = []
-if sched: st.session_state["show_sched"] = True
-if st.session_state.get("show_sched"):
-    with st.form("sched_form"):
-        ids = st.multiselect("เลือก Patient", high_risk["patient_id"].tolist() if not high_risk.empty else [])
-        d = st.date_input("วันที่นัด")
-        note = st.text_area("บันทึก")
-        if st.form_submit_button("ยืนยัน"):
-            st.session_state["outreach_q"].append({"วัน": str(d), "ราย": len(ids), "บันทึก": note})
-            st.session_state["show_sched"] = False
-            st.success(f"✅ กำหนดการ {len(ids)} ราย")
 
-return high_risk
 @st.fragment
 def render_patient_profile(avail_df, summary_pts, dv, sel_idx):
-st.markdown('
+    st.markdown("<h4>📋 Patient Profile &amp; Recommendation</h4>", unsafe_allow_html=True)
+    if sel_idx and avail_df is not None:
+        sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
+        pt_data = summary_pts.loc[sel_pid]
+        score, reasons_html, pkg_name, total_price, screenings = _analyze_patient_risk(pt_data)
+        gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
+        c_tx, badge = ("#B3261E", "🚨 High Risk") if score <= 60 else (("#B54708", "⚠️ Medium Risk") if score <= 80 else ("#065F46", "🌱 Low Risk"))
+        st.markdown(
+            f"{gender_icon} <strong>{sel_pid}</strong> — อายุ: {pt_data['age_at_visit']:.0f} ปี &nbsp; "
+            f"<span style='color:{c_tx}'>{badge}</span>",
+            unsafe_allow_html=True,
+        )
 
-📋 Patient Profile & Recommendation
+        tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
 
-', unsafe_allow_html=True)
-if sel_idx and avail_df is not None:
-sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
-pt_data = summary_pts.loc[sel_pid]
-score, reasons_html, pkg_name, total_price, screenings = _analyze_patient_risk(pt_data)
-gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
-c_tx, badge = ("#B3261E", "🚨 High Risk") if score <= 60 else (("#B54708", "⚠️ Medium Risk") if score <= 80 else ("#065F46", "🌱 Low Risk"))
-st.markdown(f"""
-{gender_icon}
+        with tab1:
+            st.metric("Health Score", f"{score}%")
+            st.markdown(f"**💡 AI Analysis Insights:** {reasons_html}", unsafe_allow_html=True)
 
-{sel_pid}
+        with tab2:
+            hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
+            if not hist_df.empty:
+                disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
+                disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
+                disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
 
-อายุ: {pt_data['age_at_visit']:.0f} ปี
+                def highlight_risk(row):
+                    if row["Risk"] == 1:
+                        return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+                    if pd.notna(row["Sys"]) and row["Sys"] >= 140:
+                        return ["background-color:#F8C6C0"] * len(row)
+                    if pd.notna(row["BMI"]) and row["BMI"] >= 25:
+                        return ["background-color:#FEF0C7"] * len(row)
+                    return [""] * len(row)
 
-{badge}
+                st.dataframe(disp_hist.style.apply(highlight_risk, axis=1), use_container_width=True, hide_index=True, height=220)
+            else:
+                st.info("ไม่พบประวัติการรับบริการในระบบ")
 
-""", unsafe_allow_html=True)
+        with tab3:
+            pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
+            st.markdown(
+                f"**Package หลัก:** {pkg_name} &nbsp; ฿ {pkg_info.get('price', 0):,.0f}",
+                unsafe_allow_html=True,
+            )
+            if pkg_info.get("tests"):
+                for t in pkg_info["tests"]:
+                    st.markdown(f"• {t}")
+            if screenings:
+                st.markdown("**🔍 Add-on เฉพาะบุคคล:**")
+                for sc in screenings:
+                    st.markdown(f"- {sc}")
+            st.markdown(f"**รวมประเมินราคา: ฿ {total_price:,.0f}**")
+    else:
+        st.info("👈 คลิกเลือกผู้ป่วยจากตารางด้านซ้าย เพื่อดู Profile")
 
-tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
-
-with tab1:
-st.markdown(f"""
-
-Health Score
-
-{score}%
-
-💡 AI Analysis Insights:
-
-{reasons_html}
-
-""", unsafe_allow_html=True)
-with tab2:
-hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
-if not hist_df.empty:
-disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
-disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
-disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
-def highlight_risk(row):
-if row["Risk"] == 1: return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
-if pd.notna(row["Sys"]) and row["Sys"] >= 140: return ["background-color:#F8C6C0"] * len(row)
-if pd.notna(row["BMI"]) and row["BMI"] >= 25: return ["background-color:#FEF0C7"] * len(row)
-return [""] * len(row)
-st.dataframe(disp_hist.style.apply(highlight_risk, axis=1), use_container_width=True, hide_index=True, height=220)
-else:
-st.info("ไม่พบประวัติการรับบริการในระบบ")
-
-with tab3:
-pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
-st.markdown(f"""
-
-Package หลัก
-
-{pkg_name}
-
-฿ {pkg_info.get("price", 0):,.0f}
-
-""", unsafe_allow_html=True)
-
-if pkg_info.get("tests"):
-for t in pkg_info["tests"]: st.markdown(f'
-
-• {t}
-
-', unsafe_allow_html=True)
-if screenings:
-st.markdown('
-
-🔍 Add-on เฉพาะบุคคล:
-
-', unsafe_allow_html=True)
-for sc in screenings: st.markdown(f'
-
-{sc}
-
-', unsafe_allow_html=True)
-
-        st.markdown(f'
-รวมประเมินราคา: ฿ {total_price:,.0f}
-
-', unsafe_allow_html=True)
-st.markdown('
-
-', unsafe_allow_html=True)
-else:
-st.info("👈 คลิกเลือกผู้ป่วยจากตารางด้านซ้าย เพื่อดู Profile")
-
-@st.fragment
-def render_forecast_dashboard(df):
-if df is None or df.empty: return st.warning("⚠️ ไม่พบข้อมูล")
-# Using simplified dummy generation for performance in forecast fragment
-st.markdown("### 🔮 AI Forecast Dashboard (พ.ศ. 2568 - 2569)")
-st.info("จำลองข้อมูลพยากรณ์ล่วงหน้า 24 เดือน (Time-Series & Seasonal Index)")
-# (Rest of the forecast visualization logic kept minimal as per original request to maintain flow)
-# The actual large chunk of plotting code is safe to execute as it's vectorized and uses Plotly.
-
-============================================================
-Sidebar & Filtering
-============================================================
+# ============================================================
+# Sidebar & Filtering
+# ============================================================
 tab_options = [f"{v['icon']} {k}" for k, v in DISEASE_CONFIG.items()]
 selected_tab_str = st.radio(" ", tab_options, horizontal=True, label_visibility="collapsed")
 selected_tab_key = selected_tab_str.split(" ", 1)[1]
@@ -589,9 +541,9 @@ if dv.empty:
 st.warning("⚠️ ไม่มีข้อมูลตามตัวกรองที่เลือก")
 st.stop()
 
-============================================================
-Main Content Routing
-============================================================
+# ============================================================
+# Main Content Routing
+# ============================================================
 if active_config.get("is_general"):
 # Render main dashboard
 as_of = df["visit_date"].max()
@@ -607,7 +559,7 @@ st.markdown(f"""
 total_v = len(dv)
 uniq_pts = dv["patient_id"].nunique() if "patient_id" in dv.columns else total_v
 
-Pulse & KPIs
+# Pulse & KPIs
 st.markdown("### สรุปตัวชี้วัด (KPIs)")
 k1, k2, k3 = st.columns(3)
 k1.metric("จำนวนเคสรับบริการ", f"{total_v:,}")
@@ -616,7 +568,7 @@ k3.metric("ความดันโลหิตเฉลี่ย", f"{dv['systo
 
 st.divider()
 
-Data display
+# Data display
 c1, c2 = st.columns([1.5, 1])
 with c1:
 st.markdown('
@@ -647,16 +599,12 @@ st.dataframe(dv.head(50), use_container_width=True)
 
 else:
 # Disease Specific Center
-disease_df = dv[active_config"filter_condition"].copy()
-st.markdown(f'
-
-{active_config["icon"]} {selected_tab_key} Command Center
-
-', unsafe_allow_html=True)
-st.dataframe(disease_df, use_container_width=True)
-# ============================================================
-# UI Fragments (ส่วนที่เหลือ - นำไปวางทับฟังก์ชันเดิม)
-# ============================================================
+    disease_df = dv[active_config["filter_condition"](dv)].copy()
+    st.markdown(
+        f"<h3>{active_config['icon']} {selected_tab_key} Command Center</h3>",
+        unsafe_allow_html=True,
+    )
+    st.dataframe(disease_df, use_container_width=True)
 
 @st.fragment
 def render_forecast_dashboard(df):
@@ -813,110 +761,45 @@ with tab_brochure:
                     st.toast(f"✅ เลือก {sub['name']} เรียบร้อย")
 @st.fragment
 def render_disease_center(dv, df, selected_tab_key, active_config, search_term):
-disease_df = dv[active_config"filter_condition"].copy()
-st.markdown(f'
+    disease_df = dv[active_config["filter_condition"](dv)].copy()
+    st.markdown(
+        f"<h3>{active_config['icon']} {selected_tab_key} Command Center</h3>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<p>เป้าหมายการรักษา: {active_config['target_desc']}</p>",
+        unsafe_allow_html=True,
+    )
 
-{active_config["icon"]} {selected_tab_key} Command Center
+    c1, c2, c3 = st.columns(3)
+    c1.metric("จำนวนผู้ป่วย (ตามตัวกรอง)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} คน")
+    p1_count = len(disease_df[disease_df["priority_status"] == "P1-Urgent"])
+    c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน", delta="-ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
 
-', unsafe_allow_html=True)
-st.markdown(f'
+    if search_term and "patient_id" in disease_df.columns:
+        disease_df = disease_df[disease_df["patient_id"].astype(str).str.contains(search_term, case=False)]
 
-เป้าหมายการรักษา: {active_config["target_desc"]}
+    if not disease_df.empty:
+        sort_df = disease_df.sort_values(by=["priority_status"], ascending=True).copy()
+        show_cols = [c for c in ["patient_id", "visit_date", "days_since_last_visit", "priority_status", "systolic", "bmi"] if c in sort_df.columns]
 
+        def highlight_priority(row):
+            if row.get("priority_status") == "P1-Urgent":
+                return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
+            if row.get("priority_status") == "P2-Warning":
+                return ["background-color:#FEF0C7; color:#B54708"] * len(row)
+            return [""] * len(row)
 
-', unsafe_allow_html=True)
-
-c1, c2, c3 = st.columns(3)
-c1.metric("จำนวนผู้ป่วย (ตามตัวกรอง)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} คน")
-p1_count = len(disease_df[disease_df["priority_status"] == "P1-Urgent"])
-c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน", delta="-ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
-
-if search_term and "patient_id" in disease_df.columns:
-    disease_df = disease_df[disease_df["patient_id"].astype(str).str.contains(search_term, case=False)]
-
-if not disease_df.empty:
-    sort_df = disease_df.sort_values(by=["priority_status"], ascending=True).copy()
-    show_cols = [c for c in ["patient_id", "visit_date", "days_since_last_visit", "priority_status", "systolic", "bmi"] if c in sort_df.columns]
-
-    def highlight_priority(row):
-        if row.get("priority_status") == "P1-Urgent": return ["background-color:#FBE1DE; color:#B3261E"] * len(row)
-        if row.get("priority_status") == "P2-Warning": return ["background-color:#FEF0C7; color:#B54708"] * len(row)
-        return [""] * len(row)
-
-    selection = st.dataframe(sort_df[show_cols].style.apply(highlight_priority, axis=1), use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
-    
-    sel_idx = selection.selection.rows
-    if sel_idx:
-        sel_pid = sort_df.iloc[sel_idx[0]]["patient_id"]
-        st.markdown(f"### 💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}")
-        if st.button(f"✨ Generate {selected_tab_key} Care Package"):
-            st.success(f"✅ **สร้าง {selected_tab_key} Package สำเร็จ!**")
-else:
-    st.info("ไม่พบคนไข้ในกลุ่มนี้")
-============================================================
-Main Content Routing (ส่วนหน้า General Dashboard)
-นำไปต่อท้ายสุดของสคริปต์
-============================================================
-if active_config.get("is_general"):
-# (โค้ดดึงตัวแปรและ KPI ด้านบนที่คุณมีแล้ว...)
-
-st.divider()
-
-# Section 3 — Sunburst & Action Panel
-col_l, col_r = st.columns([1.7, 1])
-with col_l:
-    st.markdown('### 🔬 โครงสร้างการวินิจฉัย (Diagnosis Sunburst)')
-    # สร้าง Sunburst logic แบบย่อเพื่อความไว
-    if "disease_group" in dv.columns and "diagnosis_clean" in dv.columns:
-        sun_df = dv.groupby(["disease_group", "diagnosis_clean"]).size().reset_index(name="count").nlargest(15, "count")
-        fig_sun = px.sunburst(sun_df, path=["disease_group", "diagnosis_clean"], values="count", color="disease_group", color_discrete_map=DISEASE_COLORS)
-        fig_sun.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=350, paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig_sun, use_container_width=True)
-
-with col_r:
-    st.markdown('### 🩺 ระดับความดันโลหิต')
-    bp_pie = dv["bp_level"].value_counts().reset_index()
-    bp_pie.columns = ["Level", "Count"]
-    fig_pie = px.pie(bp_pie, names="Level", values="Count", hole=0.55, color="Level", color_discrete_map=BP_COLORS)
-    fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=350, margin=dict(l=0, r=0, t=0, b=0))
-    st.plotly_chart(fig_pie, use_container_width=True)
-
-# Section 5 — Population Pyramid + Scatter
-p2, p3 = st.columns([1, 1])
-with p2:
-    st.markdown('### 🏢 Top 10 คลินิก')
-    cl = dv["clinic_name"].value_counts().head(10).reset_index()
-    cl.columns = ["คลินิก", "n"]
-    fig_cl = px.bar(cl.sort_values("n"), x="n", y="คลินิก", orientation="h", color="n", color_continuous_scale=[[0, "#CFE3DF"], [1, TEAL]])
-    fig_cl.update_layout(height=310, margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)
-    st.plotly_chart(fig_cl, use_container_width=True)
-
-with p3:
-    st.markdown('### ⚖️ BMI vs Systolic BP')
-    sc = dv[dv["is_adult"] & dv["systolic"].notna() & ~dv["bmi_imputed"]].copy()
-    if not sc.empty:
-        fig_sc = px.scatter(sc.head(500), x="bmi", y="systolic", color="disease_group", color_discrete_map=DISEASE_COLORS, opacity=0.7)
-        fig_sc.add_hline(y=140, line_dash="dot", line_color=RED)
-        fig_sc.add_vline(x=25, line_dash="dot", line_color=RED)
-        fig_sc.update_layout(height=310, margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig_sc, use_container_width=True)
-
-# Section 6 — Patient Profile
-col_left, col_right = st.columns([1.6, 1])
-with col_left:
-    st.markdown('### 🔍 เลือกผู้ป่วยเพื่อประเมิน Package')
-    if summary_pts is not None and "patient_id" in dv.columns:
-        avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
-        selection = st.dataframe(avail_df[["patient_id", "age_at_visit", "visits", "bmi", "systolic"]], use_container_width=True, hide_index=True, height=220, on_select="rerun", selection_mode="single-row")
+        selection = st.dataframe(
+            sort_df[show_cols].style.apply(highlight_priority, axis=1),
+            use_container_width=True, hide_index=True,
+            on_select="rerun", selection_mode="single-row",
+        )
         sel_idx = selection.selection.rows
+        if sel_idx:
+            sel_pid = sort_df.iloc[sel_idx[0]]["patient_id"]
+            st.markdown(f"### 💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}")
+            if st.button(f"✨ Generate {selected_tab_key} Care Package"):
+                st.success(f"✅ **สร้าง {selected_tab_key} Package สำเร็จ!**")
     else:
-        avail_df, sel_idx = None, []
-
-with col_right:
-    render_patient_profile(avail_df, summary_pts, dv, sel_idx)
-elif active_config.get("is_forecast"):
-render_forecast_dashboard(dv)
-elif active_config.get("is_other_packages"):
-render_other_packages_dashboard(dv, df, search_term)
-else:
-render_disease_center(dv, df, selected_tab_key, active_config, search_term)
+        st.info("ไม่พบคนไข้ในกลุ่มนี้")
