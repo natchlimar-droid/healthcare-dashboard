@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import matplotlib.pyplot as plt
 
 # ============================================================
 # Page Config (Must be the first Streamlit command)
@@ -29,12 +30,69 @@ except ImportError:
     SKLEARN_AVAILABLE = False
 
 try:
+    from prophet import Prophet
+    PROPHET_AVAILABLE = True
+except ImportError:
+    PROPHET_AVAILABLE = False
+
+try:
+    import xgboost as xgb
+    import shap
+    XGB_SHAP_AVAILABLE = True
+except ImportError:
+    XGB_SHAP_AVAILABLE = False
+
+try:
     from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
     AGGRID_AVAILABLE = True
 except ImportError:
     AGGRID_AVAILABLE = False
 
 USE_AGGRID = False
+
+# ============================================================
+# ML Caching Functions
+# ============================================================
+@st.cache_resource(show_spinner=False)
+def get_business_forecast_model(df_hist):
+    if not PROPHET_AVAILABLE or df_hist is None or df_hist.empty:
+        return None
+    try:
+        pdf = pd.DataFrame()
+        if "ym" in df_hist.columns:
+            pdf["ds"] = df_hist["ym"].dt.to_timestamp()
+        else:
+            pdf["ds"] = pd.to_datetime(df_hist.index)
+        pdf["y"] = df_hist["total_cases"].values if "total_cases" in df_hist.columns else df_hist.iloc[:, 1].values
+        
+        m = Prophet(yearly_seasonality=True, weekly_seasonality=False, daily_seasonality=False)
+        m.fit(pdf)
+        return m
+    except Exception as e:
+        st.error(f"Prophet Error: {e}")
+        return None
+
+@st.cache_resource(show_spinner=False)
+def get_upsell_risk_models(df_train):
+    if not XGB_SHAP_AVAILABLE or df_train is None or df_train.empty:
+        return None, None
+    try:
+        features = ["age_at_visit", "bmi", "systolic", "gender_code", "visits"]
+        available_features = [f for f in features if f in df_train.columns]
+        if not available_features or "target" not in df_train.columns:
+            return None, None
+            
+        X = df_train[available_features].fillna(0)
+        y = df_train["target"].fillna(0)
+        
+        model = xgb.XGBClassifier(eval_metric="logloss", use_label_encoder=False, random_state=42)
+        model.fit(X, y)
+        
+        explainer = shap.TreeExplainer(model)
+        return model, explainer
+    except Exception as e:
+        st.error(f"XGBoost/SHAP Error: {e}")
+        return None, None
 
 # ============================================================
 # Design Tokens & Configurations
@@ -443,7 +501,7 @@ def render_patient_profile(avail_df, summary_pts, dv, sel_idx):
             c_tx, badge = "#065F46", "🌱 Low Risk"
         st.markdown(f"{gender_icon} **{sel_pid}** — อายุ: {pt_data['age_at_visit']:.0f} ปี | :{badge}:")
 
-        tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ", "🤖 AI Predict (XGBoost)"])
 
         with tab1:
             st.metric("Health Score", f"{score}%")
@@ -480,6 +538,30 @@ def render_patient_profile(avail_df, summary_pts, dv, sel_idx):
                 for sc in screenings:
                     st.markdown(f"- {sc}")
             st.markdown(f"**รวมประเมินราคา: ฿ {total_price:,.0f}**")
+            
+        with tab4:
+            xgb_model, explainer = get_upsell_risk_models(summary_pts)
+            if xgb_model and explainer:
+                features = ["age_at_visit", "bmi", "systolic", "gender_code", "visits"]
+                pt_df = pd.DataFrame([pt_data])[features].fillna(0)
+                
+                prob = xgb_model.predict_proba(pt_df)[0][1] * 100
+                
+                st.markdown("#### 🎯 Upsell Probability Score")
+                if prob >= 70:
+                    st.error(f"🔥 Hot Lead: {prob:.1f}%")
+                elif prob >= 40:
+                    st.warning(f"⚡ Warm Lead: {prob:.1f}%")
+                else:
+                    st.success(f"🌱 Cold Lead: {prob:.1f}%")
+                
+                st.markdown("##### 🧠 SHAP Explainability (Why?)")
+                shap_values = explainer(pt_df)
+                fig, ax = plt.subplots(figsize=(6, 4))
+                shap.plots.waterfall(shap_values[0], show=False)
+                st.pyplot(fig)
+            else:
+                st.info("⚠️ XGBoost or SHAP models are currently unavailable (missing library or training data).")
     else:
         st.info("👈 คลิกเลือกผู้ป่วยจากตารางด้านซ้าย เพื่อดู Profile")
 
@@ -518,12 +600,6 @@ def render_forecast_dashboard(df):
         hist_cases = [int(round(mean_c * 0.88 * s * (1 + np.random.normal(0, 0.02)))) for s in seasonal_base]
         hist_critical = [int(round(mean_crit * 0.86 * s * (1 + np.random.normal(0, 0.025)))) for s in seasonal_base]
 
-    x_hist = np.arange(len(hist_cases))
-    slope_tot, intercept_tot = np.polyfit(x_hist, np.array(hist_cases, dtype=float), 1)
-    slope_crit, intercept_crit = np.polyfit(x_hist, np.array(hist_critical, dtype=float), 1)
-    if slope_tot <= 0: slope_tot = np.mean(hist_cases) * 0.015
-    if slope_crit <= 0: slope_crit = np.mean(hist_critical) * 0.018
-
     forecast_periods = [f"{y}-{m:02d}" for y in [2025, 2026] for m in range(1, 13)]
     seasonal_pattern = {1: 1.06, 2: 0.94, 3: 0.96, 4: 0.89, 5: 1.01, 6: 1.07, 7: 1.10, 8: 1.13, 9: 1.08, 10: 1.05, 11: 1.08, 12: 1.12}
 
@@ -536,22 +612,54 @@ def render_forecast_dashboard(df):
         show_crit_line = st.checkbox("⚠️ แสดงกลุ่มเสี่ยง NCDs", value=True, key="fc_show_crit")
 
     scenario_mult = 1.10 if "เชิงรุก" in scenario else (0.95 if "อนุรักษ์นิยม" in scenario else 1.00)
-    np.random.seed(42)
-    forecast_data, base_step = [], len(hist_cases)
+    
+    forecast_data = []
+    prophet_model = get_business_forecast_model(monthly_stats)
+    
+    if prophet_model is not None:
+        future_dates = pd.DataFrame({"ds": pd.to_datetime(forecast_periods)})
+        forecast = prophet_model.predict(future_dates)
+        
+        mean_crit_ratio = np.mean(hist_critical) / np.mean(hist_cases) if np.mean(hist_cases) > 0 else 0.20
+        
+        for i, row in forecast.iterrows():
+            y_int, m_int = row['ds'].year, row['ds'].month
+            
+            projected = int(round(row['yhat'] * scenario_mult))
+            lower = int(round(row['yhat_lower'] * scenario_mult))
+            upper = int(round(row['yhat_upper'] * scenario_mult))
+            
+            proj_crit = int(round(projected * mean_crit_ratio * (1.05 if m_int >= 7 else 0.97)))
+            
+            forecast_data.append({
+                "period": f"{y_int}-{m_int:02d}", "year": y_int, "month": m_int,
+                "projected_cases": max(100, projected),
+                "lower_bound": max(50, lower),
+                "upper_bound": upper,
+                "projected_critical": max(10, proj_crit)
+            })
+    else:
+        x_hist = np.arange(len(hist_cases))
+        slope_tot, intercept_tot = np.polyfit(x_hist, np.array(hist_cases, dtype=float), 1)
+        slope_crit, intercept_crit = np.polyfit(x_hist, np.array(hist_critical, dtype=float), 1)
+        if slope_tot <= 0: slope_tot = np.mean(hist_cases) * 0.015
+        if slope_crit <= 0: slope_crit = np.mean(hist_critical) * 0.018
 
-    for i, p_str in enumerate(forecast_periods):
-        y_int, m_int = int(p_str.split("-")[0]), int(p_str.split("-")[1])
-        s_val = seasonal_pattern.get(m_int, 1.0)
-        projected = int(round((intercept_tot + slope_tot * (base_step + i)) * scenario_mult * s_val * (1 + np.random.normal(0, 0.022))))
-        ci_pct = 0.08 + (i / 24.0) * 0.06
-        proj_crit = int(round((intercept_crit + slope_crit * (base_step + i)) * scenario_mult * s_val * (1.05 if m_int >= 7 else 0.97) * (1 + np.random.normal(0, 0.025))))
-        forecast_data.append({
-            "period": p_str, "year": y_int, "month": m_int,
-            "projected_cases": max(100, projected),
-            "lower_bound": int(round(projected * (1 - ci_pct))),
-            "upper_bound": int(round(projected * (1 + ci_pct))),
-            "projected_critical": max(10, min(proj_crit, int(projected * 0.45)))
-        })
+        np.random.seed(42)
+        base_step = len(hist_cases)
+        for i, p_str in enumerate(forecast_periods):
+            y_int, m_int = int(p_str.split("-")[0]), int(p_str.split("-")[1])
+            s_val = seasonal_pattern.get(m_int, 1.0)
+            projected = int(round((intercept_tot + slope_tot * (base_step + i)) * scenario_mult * s_val * (1 + np.random.normal(0, 0.022))))
+            ci_pct = 0.08 + (i / 24.0) * 0.06
+            proj_crit = int(round((intercept_crit + slope_crit * (base_step + i)) * scenario_mult * s_val * (1.05 if m_int >= 7 else 0.97) * (1 + np.random.normal(0, 0.025))))
+            forecast_data.append({
+                "period": p_str, "year": y_int, "month": m_int,
+                "projected_cases": max(100, projected),
+                "lower_bound": int(round(projected * (1 - ci_pct))),
+                "upper_bound": int(round(projected * (1 + ci_pct))),
+                "projected_critical": max(10, min(proj_crit, int(projected * 0.45)))
+            })
 
     tot_24m = sum(r["projected_cases"] for r in forecast_data)
     tot_2025 = sum(r["projected_cases"] for r in forecast_data if r["year"] == 2025)
