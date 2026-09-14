@@ -337,38 +337,58 @@ raw_df, monthly_df, has_date, has_age = load_data()
 if raw_df is None:
     st.error("⚠️ ไม่พบไฟล์ข้อมูล กรุณาอัปโหลดไฟล์ `visits_cleaned.csv` หรือไฟล์อื่นๆ ที่ระบุ")
     st.stop()
-df = process_patient_data(raw_df)
-
-summary_pts, high_lead_count, est_pipeline = None, 0, 0
-if "patient_id" in df.columns:
-    summary_pts = build_summary_pts(df)
-
+df = process_patient_da# ============================================================
+# Main Content Routing
 # ============================================================
-# Business Logic Helpers
-# ============================================================
-def _recommend_package(row):
-    age, gender_code = row.get("age_at_visit", 35), row.get("gender_code", 0.5)
-    pkg_name, base_price = ("Longevity Package", 8000) if age >= 50 else (("Advanced Package", 5500) if age >= 30 else ("Essential Package", 3000))
-    screenings, add_on_price = [], 0
-    if gender_code > 0.5 and age >= 40: screenings.append("Mammogram"); add_on_price += 2000
-    if gender_code < 0.5 and age >= 50: screenings.append("PSA (มะเร็งต่อมลูกหมาก)"); add_on_price += 2000
-    return pkg_name, base_price, screenings, add_on_price
+if active_config.get("is_general"):
+    # Render main dashboard
+    as_of = df["visit_date"].max()
+    as_of_str = as_of.strftime("%d %b %Y") if pd.notna(as_of) else "ไม่ระบุ"
+    st.markdown(
+        f"<h2>🏥 Clinical Command Center</h2><p>ข้อมูลล่าสุด {as_of_str}</p>",
+        unsafe_allow_html=True,
+    )
 
-def _analyze_patient_risk(row):
-    score, reasons = 100, []
-    sys_val, bmi_val, visits_val = row.get("systolic", 0), row.get("bmi", 22), row.get("visits", 1)
+    total_v = len(dv)
+    uniq_pts = dv["patient_id"].nunique() if "patient_id" in dv.columns else total_v
 
-    if sys_val >= 160: score -= 40; reasons.append(f"🫀 ความดันวิกฤต ({sys_val:.0f})")
-    elif sys_val >= 140: score -= 25; reasons.append(f"🫀 ความดันสูง ({sys_val:.0f})")
-    elif sys_val >= 130: score -= 10; reasons.append(f"🫀 เฝ้าระวังความดัน ({sys_val:.0f})")
+    # Pulse & KPIs
+    st.markdown("### สรุปตัวชี้วัด (KPIs)")
+    k1, k2, k3 = st.columns(3)
+    k1.metric("จำนวนเคสรับบริการ", f"{total_v:,}")
+    k2.metric("จำนวนผู้รับบริการ", f"{uniq_pts:,}")
+    k3.metric("ความดันโลหิตเฉลี่ย", f"{dv['systolic'].mean():.1f} mmHg")
 
-    if bmi_val >= 30: score -= 20; reasons.append(f"📈 โรคอ้วน ({bmi_val:.1f})")
-    elif bmi_val >= 25: score -= 10; reasons.append(f"📈 น้ำหนักเกิน ({bmi_val:.1f})")
+    st.divider()
 
-    if visits_val >= 5: score -= 15; reasons.append(f"🏥 มารพ. บ่อยผิดปกติ ({visits_val:.0f} ครั้ง)")
-    elif visits_val >= 3: score -= 5; reasons.append(f"🏥 มีประวัติมาซ้ำ ({visits_val:.0f} ครั้ง)")
+    # Data display
+    c1, c2 = st.columns([1.5, 1])
+    with c1:
+        st.markdown("#### ⚡ Command Action Panel")
+        render_action_panel(dv)
 
-    pkg_name, base_price, screenings, add_on_price = _recommend_package(row)
+    with c2:
+        st.markdown("#### 🔍 เลือกผู้ป่วยเพื่อประเมิน Package")
+        if summary_pts is not None and "patient_id" in dv.columns:
+            avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
+            selection = st.dataframe(
+                avail_df[["patient_id", "age_at_visit", "bmi"]],
+                use_container_width=True, hide_index=True, height=220,
+                on_select="rerun", selection_mode="single-row",
+            )
+            sel_idx = selection.selection.rows
+        else:
+            avail_df, sel_idx = None, []
+        render_patient_profile(avail_df, summary_pts, dv, sel_idx)
+
+elif active_config.get("is_forecast"):
+    render_forecast_dashboard(dv)
+
+elif active_config.get("is_other_packages"):
+    render_other_packages_dashboard(dv, df, search_term)
+
+else:
+    render_disease_center(dv, df, selected_tab_key, active_config, search_term)rice = _recommend_package(row)
     if screenings: score -= 5
     for sc in screenings: reasons.append(f"🎗️ แนะนำ {sc}")
     if not reasons: reasons.append("✅ สุขภาพอยู่ในเกณฑ์ปกติ")
