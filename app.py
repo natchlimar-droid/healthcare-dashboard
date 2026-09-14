@@ -14,7 +14,7 @@ import streamlit as st
 # ============================================================
 st.set_page_config(
     page_title="Clinical Command Center",
-    page_icon="๐ฅ",
+    page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -49,16 +49,16 @@ RED    = "#B3261E"
 MUTED  = "#5B6B6B"
 
 DISEASE_COLORS = {
-    "เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธชเธนเธ": TEAL,
-    "เน€เธเธฒเธซเธงเธฒเธ": "#2F6FB5",
-    "เนเธเธกเธฑเธเนเธเน€เธฅเธทเธญเธ”เธชเธนเธ": AMBER,
-    "เธญเธทเนเธ เน": "#9AA6A0",
+    "ความดันโลหิตสูง": TEAL,
+    "เบาหวาน": "#2F6FB5",
+    "ไขมันในเลือดสูง": AMBER,
+    "อื่น ๆ": "#9AA6A0",
 }
 BP_COLORS = {
-    "เธเธเธ•เธด (<120)": SAGE,
-    "เน€เธเนเธฒเธฃเธฐเธงเธฑเธ (120-139)": AMBER,
-    "เธชเธนเธ (>=140)": RED,
-    "เนเธกเนเธกเธตเธเนเธญเธกเธนเธฅ": "#C7CFCC",
+    "ปกติ (<120)": SAGE,
+    "เฝ้าระวัง (120-139)": AMBER,
+    "สูง (>=140)": RED,
+    "ไม่มีข้อมูล": "#C7CFCC",
 }
 
 MIN_SAMPLE = 5
@@ -68,75 +68,75 @@ HEALTH_PACKAGES = {
     "Essential Package": {
         "price": 3000,
         "tests": ["CBC", "FBS", "Lipid Profile", "Uric Acid", "CXR", "EKG"],
-        "desc": "เน€เธซเธกเธฒเธฐเธชเธณเธซเธฃเธฑเธเธงเธฑเธขเน€เธฃเธดเนเธกเธ•เนเธเธ—เธณเธเธฒเธเนเธฅเธฐเธเธนเนเธ—เธตเนเนเธกเนเธกเธตเธเธงเธฒเธกเน€เธชเธตเนเธขเธ (เธญเธฒเธขเธธ <30 เธเธต)"
+        "desc": "เหมาะสำหรับวัยเริ่มต้นทำงานและผู้ที่ไม่มีความเสี่ยง (อายุ <30 ปี)"
     },
     "Advanced Package": {
         "price": 5500,
         "tests": ["Essential Tests +", "Liver Function", "Kidney Function", "HbA1c", "Urine Examination", "Ultrasound Whole Abdomen"],
-        "desc": "เน€เธซเธกเธฒเธฐเธชเธณเธซเธฃเธฑเธเธงเธฑเธขเธ—เธณเธเธฒเธเธ—เธตเนเน€เธฃเธดเนเธกเธกเธตเธเธงเธฒเธกเน€เธชเธตเนเธขเธ (เธญเธฒเธขเธธ 30-50 เธเธต)"
+        "desc": "เหมาะสำหรับวัยทำงานที่เริ่มมีความเสี่ยง (อายุ 30-50 ปี)"
     },
     "Longevity Package": {
         "price": 8000,
         "tests": ["Advanced Tests +", "Thyroid Function", "Bone Densitometry", "Tumor Markers", "ABI"],
-        "desc": "เน€เธซเธกเธฒเธฐเธชเธณเธซเธฃเธฑเธเธเธนเนเธชเธนเธเธญเธฒเธขเธธเธซเธฃเธทเธญเธกเธตเธเธงเธฒเธกเน€เธชเธตเนเธขเธเนเธฃเธเน€เธฃเธทเนเธญเธฃเธฑเธ (เธญเธฒเธขเธธ >50 เธเธต)"
+        "desc": "เหมาะสำหรับผู้สูงอายุหรือมีความเสี่ยงโรคเรื้อรัง (อายุ >50 ปี)"
     }
 }
 
 HEALTH_PACKAGES_4LEVEL = {
     1: {
-        "level": 1, "name": "เธเธฅเธธเนเธก 1: เธ•เธฃเธงเธเธชเธธเธเธ เธฒเธเธ—เธฑเนเธงเนเธ", "short_title": "เธ•เธฃเธงเธเธชเธธเธเธ เธฒเธเธ—เธฑเนเธงเนเธ",
-        "target_audience": "เธชเธณเธซเธฃเธฑเธเธเธเธ—เธตเนเนเธชเนเนเธเธชเธธเธเธ เธฒเธ เธญเธขเธฒเธเธฃเธนเนเธเธทเนเธเธเธฒเธเธเธญเธเธ•เธฑเธงเน€เธญเธ",
+        "level": 1, "name": "กลุ่ม 1: ตรวจสุขภาพทั่วไป", "short_title": "ตรวจสุขภาพทั่วไป",
+        "target_audience": "สำหรับคนที่ใส่ใจสุขภาพ อยากรู้พื้นฐานของตัวเอง",
         "badge_color": "#0E7055", "badge_bg": "#DCFCE7", "header_bg": "#0E7055",
         "price": 990,
         "sub_packages": [
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ BASIC", "short_name": "BASIC", "price": 990},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ STANDARD", "short_name": "STANDARD", "price": 2290},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ PREMIUM", "short_name": "PREMIUM", "price": 4990},
+            {"name": "แพคเกจตรวจสุขภาพ BASIC", "short_name": "BASIC", "price": 990},
+            {"name": "แพคเกจตรวจสุขภาพ STANDARD", "short_name": "STANDARD", "price": 2290},
+            {"name": "แพคเกจตรวจสุขภาพ PREMIUM", "short_name": "PREMIUM", "price": 4990},
         ]
     },
     2: {
-        "level": 2, "name": "เธเธฅเธธเนเธก 2: เธขเธฑเธเนเธกเนเธเธเนเธฃเธเนเธ•เนเธกเธตเธเธงเธฒเธกเน€เธชเธตเนเธขเธ", "short_title": "เธขเธฑเธเนเธกเนเธเธเนเธฃเธเนเธ•เนเธกเธตเธเธงเธฒเธกเน€เธชเธตเนเธขเธ",
-        "target_audience": "เธชเธณเธซเธฃเธฑเธเธเธนเนเธ—เธตเนเธกเธตเธเธฑเธเธเธฑเธขเน€เธชเธตเนเธขเธเธเธฒเธเธญเธฒเธขเธธ เธเนเธณเธซเธเธฑเธ เธเธคเธ•เธดเธเธฃเธฃเธก เธซเธฃเธทเธญเธเธฃเธฐเธงเธฑเธ•เธดเธเธฃเธญเธเธเธฃเธฑเธง",
+        "level": 2, "name": "กลุ่ม 2: ยังไม่พบโรคแต่มีความเสี่ยง", "short_title": "ยังไม่พบโรคแต่มีความเสี่ยง",
+        "target_audience": "สำหรับผู้ที่มีปัจจัยเสี่ยงจากอายุ น้ำหนัก พฤติกรรม หรือประวัติครอบครัว",
         "badge_color": "#B45309", "badge_bg": "#FEF3C7", "header_bg": "#D97706",
         "price": 2990,
         "sub_packages": [
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ 9.9 METABOLIC HEALTH MONTH", "short_name": "9.9 METABOLIC", "price": 2990},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ เธเธเธญเนเธงเธ (Obesity Check)", "short_name": "เธเธเธญเนเธงเธ", "price": 2990},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ เธงเธฑเธข 35+", "short_name": "เธงเธฑเธข 35+", "price": 3990},
+            {"name": "แพคเกจตรวจสุขภาพ 9.9 METABOLIC HEALTH MONTH", "short_name": "9.9 METABOLIC", "price": 2990},
+            {"name": "แพคเกจตรวจสุขภาพ คนอ้วน (Obesity Check)", "short_name": "คนอ้วน", "price": 2990},
+            {"name": "แพคเกจตรวจสุขภาพ วัย 35+", "short_name": "วัย 35+", "price": 3990},
         ]
     },
     3: {
-        "level": 3, "name": "เธเธฅเธธเนเธก 3: เน€เธฃเธดเนเธกเธกเธตเธเธงเธฒเธกเธเธดเธ”เธเธเธ•เธด/เนเธฃเธเธฃเธฐเธขเธฐเน€เธฃเธดเนเธกเธ•เนเธ", "short_title": "เน€เธฃเธดเนเธกเธกเธตเธเธงเธฒเธกเธเธดเธ”เธเธเธ•เธด",
-        "target_audience": "เธชเธณเธซเธฃเธฑเธเธเธนเนเธ—เธตเนเธกเธตเธเนเธฒเธเธฅเธ•เธฃเธงเธเน€เธฃเธดเนเธกเธเธดเธ”เธเธเธ•เธด เธซเธฃเธทเธญเนเธ”เนเธฃเธฑเธเธเธฒเธฃเธงเธดเธเธดเธเธเธฑเธขเนเธฃเธเธฃเธฐเธขเธฐเน€เธฃเธดเนเธกเธ•เนเธ",
+        "level": 3, "name": "กลุ่ม 3: เริ่มมีความผิดปกติ/โรคระยะเริ่มต้น", "short_title": "เริ่มมีความผิดปกติ",
+        "target_audience": "สำหรับผู้ที่มีค่าผลตรวจเริ่มผิดปกติ หรือได้รับการวินิจฉัยโรคระยะเริ่มต้น",
         "badge_color": "#B91C1C", "badge_bg": "#FEE2E2", "header_bg": "#DC2626",
         "price": 2990,
         "sub_packages": [
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ เน€เธเธฒเธซเธงเธฒเธ (Diabetes Check)", "short_name": "เน€เธเธฒเธซเธงเธฒเธ", "price": 3290},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธชเธนเธ (Hypertension Check)", "short_name": "เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธชเธนเธ", "price": 2990},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ เนเธเธกเธฑเธเนเธเน€เธฅเธทเธญเธ”เธชเธนเธ (Lipid Check)", "short_name": "เนเธเธกเธฑเธเนเธเน€เธฅเธทเธญเธ”เธชเธนเธ", "price": 2990},
+            {"name": "แพคเกจตรวจสุขภาพ เบาหวาน (Diabetes Check)", "short_name": "เบาหวาน", "price": 3290},
+            {"name": "แพคเกจตรวจสุขภาพ ความดันโลหิตสูง (Hypertension Check)", "short_name": "ความดันโลหิตสูง", "price": 2990},
+            {"name": "แพคเกจตรวจสุขภาพ ไขมันในเลือดสูง (Lipid Check)", "short_name": "ไขมันในเลือดสูง", "price": 2990},
         ]
     },
     4: {
-        "level": 4, "name": "เธเธฅเธธเนเธก 4: เธกเธตเธญเธฒเธเธฒเธฃเธเนเธณ เน / เธเธงเธฃเธเธฃเธฐเน€เธกเธดเธเน€เธเธดเนเธกเน€เธ•เธดเธก", "short_title": "เธกเธตเธญเธฒเธเธฒเธฃเธเนเธณเน",
-        "target_audience": "เธชเธณเธซเธฃเธฑเธเธเธนเนเธ—เธตเนเธกเธตเธญเธฒเธเธฒเธฃเธเธดเธ”เธเธเธ•เธดเธเนเธณเน เธซเธฃเธทเธญเธกเธตเธเธงเธฒเธกเธเธฑเธเธงเธฅเนเธฅเธฐเธ•เนเธญเธเธเธฒเธฃเธ•เธฃเธงเธเน€เธเธดเธเธฅเธถเธ",
+        "level": 4, "name": "กลุ่ม 4: มีอาการซ้ำ ๆ / ควรประเมินเพิ่มเติม", "short_title": "มีอาการซ้ำๆ",
+        "target_audience": "สำหรับผู้ที่มีอาการผิดปกติซ้ำๆ หรือมีความกังวลและต้องการตรวจเชิงลึก",
         "badge_color": "#5B21B6", "badge_bg": "#F3E8FF", "header_bg": "#6941C6",
         "price": 4990,
         "sub_packages": [
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธเธฑเธ”เธเธฃเธญเธ เธกเธฐเน€เธฃเนเธ (Cancer Screening)", "short_name": "เธเธฑเธ”เธเธฃเธญเธเธกเธฐเน€เธฃเนเธ", "price": 4990},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ เธซเธฑเธงเนเธ (Heart Check)", "short_name": "เธซเธฑเธงเนเธ", "price": 4990},
-            {"name": "เนเธเธเน€เธเธเธ•เธฃเธงเธเธเธฑเธ”เธเธฃเธญเธ เธกเธฐเน€เธฃเนเธเธฅเธณเนเธชเนเนเธซเธเน (Colonoscopy)", "short_name": "Colonoscopy", "price": 8900},
+            {"name": "แพคเกจตรวจคัดกรอง มะเร็ง (Cancer Screening)", "short_name": "คัดกรองมะเร็ง", "price": 4990},
+            {"name": "แพคเกจตรวจสุขภาพ หัวใจ (Heart Check)", "short_name": "หัวใจ", "price": 4990},
+            {"name": "แพคเกจตรวจคัดกรอง มะเร็งลำไส้ใหญ่ (Colonoscopy)", "short_name": "Colonoscopy", "price": 8900},
         ]
     }
 }
 
 DISEASE_CONFIG = {
-    "๐ฅ General Dashboard (เธซเธเนเธฒเนเธฃเธ)": {"icon": "๐ฅ", "is_general": True},
-    "๐”ฎ AI Forecast (เธเธขเธฒเธเธฃเธ“เน 2568-2569)": {"icon": "๐”ฎ", "is_forecast": True, "target_desc": "เธเธขเธฒเธเธฃเธ“เนเธฅเนเธงเธเธซเธเนเธฒ 24 เน€เธ”เธทเธญเธ"},
-    "เธฅเนเธฒเธเนเธ• (Dialysis)": {"icon": "๐ฉบ", "filter_condition": lambda df: df["is_dialysis"] == True, "target_desc": "BP <130/80"},
-    "เน€เธเธฒเธซเธงเธฒเธ (Diabetes)": {"icon": "๐ฉธ", "filter_condition": lambda df: df["disease_group"] == "เน€เธเธฒเธซเธงเธฒเธ", "target_desc": "HbA1c <7.0"},
-    "เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธชเธนเธ (Hypertension)": {"icon": "๐ซ€", "filter_condition": lambda df: df["disease_group"] == "เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธชเธนเธ", "target_desc": "BP <140/90"},
-    "เนเธเธกเธฑเธเนเธเน€เธฅเธทเธญเธ”เธชเธนเธ (Dyslipidemia)": {"icon": "๐ง", "filter_condition": lambda df: df["disease_group"] == "เนเธเธกเธฑเธเนเธเน€เธฅเธทเธญเธ”เธชเธนเธ", "target_desc": "LDL <100"},
-    "เธเธฅเธธเนเธกเธญเธทเนเธ เน (Health Packages)": {"icon": "๐งฌ", "filter_condition": lambda df: (df["disease_group"] == "เธญเธทเนเธ เน") | (df["disease_group"].isna()) | (df["disease_group"] == "เนเธกเนเธฃเธฐเธเธธ") | (df["disease_group"] == "เธ—เธฑเนเธงเนเธ"), "target_desc": "เธเธฑเธ”เธเธฃเธญเธเธชเธธเธเธ เธฒเธเน€เธเธดเธเธฃเธธเธ", "is_other_packages": True}
+    "🏥 General Dashboard (หน้าแรก)": {"icon": "🏥", "is_general": True},
+    "🔮 AI Forecast (พยากรณ์ 2568-2569)": {"icon": "🔮", "is_forecast": True, "target_desc": "พยากรณ์ล่วงหน้า 24 เดือน"},
+    "ล้างไต (Dialysis)": {"icon": "🩺", "filter_condition": lambda df: df["is_dialysis"] == True, "target_desc": "BP <130/80"},
+    "เบาหวาน (Diabetes)": {"icon": "🩸", "filter_condition": lambda df: df["disease_group"] == "เบาหวาน", "target_desc": "HbA1c <7.0"},
+    "ความดันโลหิตสูง (Hypertension)": {"icon": "🫀", "filter_condition": lambda df: df["disease_group"] == "ความดันโลหิตสูง", "target_desc": "BP <140/90"},
+    "ไขมันในเลือดสูง (Dyslipidemia)": {"icon": "🧈", "filter_condition": lambda df: df["disease_group"] == "ไขมันในเลือดสูง", "target_desc": "LDL <100"},
+    "กลุ่มอื่น ๆ (Health Packages)": {"icon": "🧬", "filter_condition": lambda df: (df["disease_group"] == "อื่น ๆ") | (df["disease_group"].isna()) | (df["disease_group"] == "ไม่ระบุ") | (df["disease_group"] == "ทั่วไป"), "target_desc": "คัดกรองสุขภาพเชิงรุก", "is_other_packages": True}
 }
 
 # ============================================================
@@ -156,7 +156,7 @@ def read_csv_or_zip(file_path, preferred_csv_names=None):
         with zipfile.ZipFile(file_path, "r") as z:
             csv_files = [n for n in z.namelist() if n.lower().endswith(".csv") and not n.startswith("__MACOSX/")]
             if not csv_files:
-                raise ValueError(f"เนเธกเนเธเธเนเธเธฅเน CSV เธ เธฒเธขเนเธ ZIP: {file_path}")
+                raise ValueError(f"ไม่พบไฟล์ CSV ภายใน ZIP: {file_path}")
             selected_file = csv_files[0]
             if preferred_csv_names:
                 preferred_lower = {name.lower() for name in preferred_csv_names}
@@ -166,7 +166,7 @@ def read_csv_or_zip(file_path, preferred_csv_names=None):
                         break
             with z.open(selected_file) as csv_file:
                 return pd.read_csv(csv_file, encoding="utf-8-sig", low_memory=False)
-    raise ValueError(f"เนเธกเนเธฃเธญเธเธฃเธฑเธเธเธฃเธฐเน€เธ เธ—เนเธเธฅเน: {file_path}")
+    raise ValueError(f"ไม่รองรับประเภทไฟล์: {file_path}")
 
 def find_data_file(file_candidates):
     for file_name in file_candidates:
@@ -174,7 +174,7 @@ def find_data_file(file_candidates):
             return file_name
     return None
 
-@st.cache_data(show_spinner="เธเธณเธฅเธฑเธเนเธซเธฅเธ”เธเนเธญเธกเธนเธฅ...")
+@st.cache_data(show_spinner="กำลังโหลดข้อมูล...")
 def load_data():
     main_file = find_data_file(["visits_cleaned.csv", "visits_cleaned.zip", "visits_with_monthly_count.csv", "visits_with_monthly_count.zip"])
     if main_file is None:
@@ -182,7 +182,7 @@ def load_data():
     try:
         df = read_csv_or_zip(main_file, preferred_csv_names=["visits_cleaned.csv", "visits_with_monthly_count.csv"])
     except Exception as e:
-        st.error(f"โ ๏ธ เธญเนเธฒเธเนเธเธฅเนเธเนเธญเธกเธนเธฅเธซเธฅเธฑเธเนเธกเนเธชเธณเน€เธฃเนเธ: {e}")
+        st.error(f"⚠️ อ่านไฟล์ข้อมูลหลักไม่สำเร็จ: {e}")
         return None, None, False, False
 
     df.columns = df.columns.astype(str).str.strip()
@@ -200,7 +200,7 @@ def load_data():
         df["year_month"] = df["visit_date"].dt.to_period("M").astype(str)
         df["visit_day"] = df["visit_date"].dt.normalize()
     else:
-        df["year_month"] = "เนเธกเนเธฃเธฐเธเธธ"
+        df["year_month"] = "ไม่ระบุ"
         df["visit_day"] = pd.NaT
 
     for col in ["age_at_visit", "height_cm", "weight_kg", "bmi", "systolic_bp", "diastolic_bp"]:
@@ -219,8 +219,8 @@ def load_data():
         df["diastolic_bp"] = dia_bp
 
     df.rename(columns={"systolic_bp": "systolic", "diastolic_bp": "diastolic"}, inplace=True)
-    df["gender"] = df["gender"].fillna("เนเธกเนเธฃเธฐเธเธธ") if "gender" in df.columns else "เนเธกเนเธฃเธฐเธเธธ"
-    df["gender_code"] = df["gender"].map({"เธ": 0, "เธ": 1}).fillna(0.5)
+    df["gender"] = df["gender"].fillna("ไม่ระบุ") if "gender" in df.columns else "ไม่ระบุ"
+    df["gender_code"] = df["gender"].map({"ช": 0, "ญ": 1}).fillna(0.5)
     df["bmi_imputed"] = df["bmi"].isna() if "bmi" in df.columns else True
     df["bmi"] = df["bmi"].fillna(df["bmi"].median() if "bmi" in df.columns and pd.notna(df["bmi"].median()) else 22.0)
 
@@ -228,19 +228,19 @@ def load_data():
     if has_age:
         df["age_at_visit"] = df["age_at_visit"].fillna(df["age_at_visit"].median() if pd.notna(df["age_at_visit"].median()) else 35.0)
         df["is_adult"] = df["age_at_visit"] >= 18
-        df["age_group"] = pd.cut(df["age_at_visit"], bins=[0, 29, 39, 49, 59, 120], labels=["<30 เธเธต", "30-40 เธเธต", "40-50 เธเธต", "50-60 เธเธต", ">60 เธเธต"]).astype(str).replace("nan", "เนเธกเนเธฃเธฐเธเธธ")
+        df["age_group"] = pd.cut(df["age_at_visit"], bins=[0, 29, 39, 49, 59, 120], labels=["<30 ปี", "30-40 ปี", "40-50 ปี", "50-60 ปี", ">60 ปี"]).astype(str).replace("nan", "ไม่ระบุ")
         df["pyramid_group"] = pd.cut(df["age_at_visit"], bins=[0, 10, 20, 30, 40, 50, 60, 70, 80, 120], right=False, labels=["0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80+"]).astype(str)
     else:
-        df["age_at_visit"], df["is_adult"], df["age_group"], df["pyramid_group"] = 35.0, True, "เนเธกเนเธฃเธฐเธเธธ", "เนเธกเนเธฃเธฐเธเธธ"
+        df["age_at_visit"], df["is_adult"], df["age_group"], df["pyramid_group"] = 35.0, True, "ไม่ระบุ", "ไม่ระบุ"
 
-    bp_cat = pd.cut(df["systolic"], bins=[-1, 120, 139, 300], labels=["เธเธเธ•เธด (<120)", "เน€เธเนเธฒเธฃเธฐเธงเธฑเธ (120-139)", "เธชเธนเธ (>=140)"]).astype(object)
-    bp_cat[df["systolic"].isna()] = "เนเธกเนเธกเธตเธเนเธญเธกเธนเธฅ"
+    bp_cat = pd.cut(df["systolic"], bins=[-1, 120, 139, 300], labels=["ปกติ (<120)", "เฝ้าระวัง (120-139)", "สูง (>=140)"]).astype(object)
+    bp_cat[df["systolic"].isna()] = "ไม่มีข้อมูล"
     df["bp_level"] = bp_cat
     df["critical_risk"] = (df["is_adult"] & (df["bmi"] >= 25) & (df["systolic"] >= 140)).astype(int)
 
-    df["diagnosis_clean"] = df["diagnosis_text"].astype(str).str.strip().replace({"": "เนเธกเนเธฃเธฐเธเธธ", "-": "เนเธกเนเธฃเธฐเธเธธ", ":": "เนเธกเนเธฃเธฐเธเธธ"}).where(df["diagnosis_text"].notna(), "เนเธกเนเธฃเธฐเธเธธ") if "diagnosis_text" in df.columns else "เนเธกเนเธฃเธฐเธเธธ"
-    if "disease_group" not in df.columns: df["disease_group"] = "เธ—เธฑเนเธงเนเธ"
-    if "clinic_name" not in df.columns: df["clinic_name"] = "เนเธกเนเธฃเธฐเธเธธ"
+    df["diagnosis_clean"] = df["diagnosis_text"].astype(str).str.strip().replace({"": "ไม่ระบุ", "-": "ไม่ระบุ", ":": "ไม่ระบุ"}).where(df["diagnosis_text"].notna(), "ไม่ระบุ") if "diagnosis_text" in df.columns else "ไม่ระบุ"
+    if "disease_group" not in df.columns: df["disease_group"] = "ทั่วไป"
+    if "clinic_name" not in df.columns: df["clinic_name"] = "ไม่ระบุ"
 
     return df, None, has_date, has_age
 
@@ -250,14 +250,14 @@ def process_patient_data(dataframe):
     today = df_proc["visit_date"].max() if pd.notna(df_proc["visit_date"].max()) else pd.Timestamp.today().normalize()
 
     if "diagnosis_text" in df_proc.columns:
-        df_proc["is_dialysis"] = df_proc["diagnosis_text"].fillna("").astype(str).str.lower().str.contains("เนเธ•|kidney|dialysis|ckd", regex=True)
+        df_proc["is_dialysis"] = df_proc["diagnosis_text"].fillna("").astype(str).str.lower().str.contains("ไต|kidney|dialysis|ckd", regex=True)
     else:
         df_proc["is_dialysis"] = False
 
     days = (today - df_proc["visit_date"]).dt.days.fillna(0).clip(lower=0) if "visit_date" in df_proc.columns else pd.Series(0, index=df_proc.index)
     df_proc["days_since_last_visit"] = days
     is_dia = df_proc["is_dialysis"]
-    is_diabetes = df_proc["disease_group"].astype(str).str.contains("เน€เธเธฒเธซเธงเธฒเธ")
+    is_diabetes = df_proc["disease_group"].astype(str).str.contains("เบาหวาน")
 
     conditions = [
         is_dia & (days > 7), is_dia & (days > 3), is_dia,
@@ -285,7 +285,7 @@ def build_summary_pts(dataframe):
 # Load data sequence
 raw_df, monthly_df, has_date, has_age = load_data()
 if raw_df is None:
-    st.error("โ ๏ธ เนเธกเนเธเธเนเธเธฅเนเธเนเธญเธกเธนเธฅ เธเธฃเธธเธ“เธฒเธญเธฑเธเนเธซเธฅเธ”เนเธเธฅเน visits_cleaned.csv เธซเธฃเธทเธญเนเธเธฅเนเธญเธทเนเธเน เธ—เธตเนเธฃเธฐเธเธธ")
+    st.error("⚠️ ไม่พบไฟล์ข้อมูล กรุณาอัปโหลดไฟล์ visits_cleaned.csv หรือไฟล์อื่นๆ ที่ระบุ")
     st.stop()
 
 df = process_patient_data(raw_df)
@@ -310,7 +310,7 @@ def _recommend_package(row):
         screenings.append("Mammogram")
         add_on_price += 2000
     if gender_code < 0.5 and age >= 50:
-        screenings.append("PSA (เธกเธฐเน€เธฃเนเธเธ•เนเธญเธกเธฅเธนเธเธซเธกเธฒเธ)")
+        screenings.append("PSA (มะเร็งต่อมลูกหมาก)")
         add_on_price += 2000
     return pkg_name, base_price, screenings, add_on_price
 
@@ -321,27 +321,27 @@ def _analyze_patient_risk(row):
     visits_val = row.get("visits", 1)
 
     if sys_val >= 160:
-        score -= 40; reasons.append(f"เธเธงเธฒเธกเธ”เธฑเธเธงเธดเธเธคเธ• ({sys_val:.0f})")
+        score -= 40; reasons.append(f"ความดันวิกฤต ({sys_val:.0f})")
     elif sys_val >= 140:
-        score -= 25; reasons.append(f"เธเธงเธฒเธกเธ”เธฑเธเธชเธนเธ ({sys_val:.0f})")
+        score -= 25; reasons.append(f"ความดันสูง ({sys_val:.0f})")
     elif sys_val >= 130:
-        score -= 10; reasons.append(f"เน€เธเนเธฒเธฃเธฐเธงเธฑเธเธเธงเธฒเธกเธ”เธฑเธ ({sys_val:.0f})")
+        score -= 10; reasons.append(f"เฝ้าระวังความดัน ({sys_val:.0f})")
     if bmi_val >= 30:
-        score -= 20; reasons.append(f"เนเธฃเธเธญเนเธงเธ ({bmi_val:.1f})")
+        score -= 20; reasons.append(f"โรคอ้วน ({bmi_val:.1f})")
     elif bmi_val >= 25:
-        score -= 10; reasons.append(f"เธเนเธณเธซเธเธฑเธเน€เธเธดเธ ({bmi_val:.1f})")
+        score -= 10; reasons.append(f"น้ำหนักเกิน ({bmi_val:.1f})")
     if visits_val >= 5:
-        score -= 15; reasons.append(f"เธกเธฒเธฃเธ.เธเนเธญเธขเธเธดเธ”เธเธเธ•เธด ({visits_val:.0f} เธเธฃเธฑเนเธ)")
+        score -= 15; reasons.append(f"มารพ.บ่อยผิดปกติ ({visits_val:.0f} ครั้ง)")
     elif visits_val >= 3:
-        score -= 5; reasons.append(f"เธกเธตเธเธฃเธฐเธงเธฑเธ•เธดเธกเธฒเธเนเธณ ({visits_val:.0f} เธเธฃเธฑเนเธ)")
+        score -= 5; reasons.append(f"มีประวัติมาซ้ำ ({visits_val:.0f} ครั้ง)")
 
     pkg_name, base_price, screenings, add_on_price = _recommend_package(row)
     if screenings:
         score -= 5
     for sc in screenings:
-        reasons.append(f"เนเธเธฐเธเธณ {sc}")
+        reasons.append(f"แนะนำ {sc}")
     if not reasons:
-        reasons.append("เธชเธธเธเธ เธฒเธเธญเธขเธนเนเนเธเน€เธเธ“เธ‘เนเธเธเธ•เธด")
+        reasons.append("สุขภาพอยู่ในเกณฑ์ปกติ")
 
     return max(0, score), " | ".join(reasons), pkg_name, base_price + add_on_price, screenings
 
@@ -355,34 +355,34 @@ def _assess_patient_tier(pt_row):
     gender = str(pt_row.get("gender", ""))
     diag = str(pt_row.get("diagnosis_clean", pt_row.get("diagnosis_text", ""))).lower()
 
-    has_chronic = any(k in diag for k in ["เนเธเนเธเธซเธเนเธฒเธญเธ", "เน€เธซเธเธทเนเธญเธข", "เนเธเธชเธฑเนเธ", "เธซเธฑเธงเนเธ", "chest pain", "เธกเธฐเน€เธฃเนเธ", "เธเนเธญเธ", "tumor"])
-    has_dm = any(k in diag for k in ["เน€เธเธฒเธซเธงเธฒเธ", "diabetes", "dm"]) or float(pt_row.get("fbs", 0)) >= 100 or float(pt_row.get("hba1c", 0)) >= 5.7
-    has_ht = any(k in diag for k in ["เธเธงเธฒเธกเธ”เธฑเธ", "hypertension", "ht"]) or sys_bp >= 140 or dia_bp >= 90
-    has_lipid = any(k in diag for k in ["เนเธเธกเธฑเธ", "lipid", "cholesterol"]) or float(pt_row.get("cholesterol", 0)) >= 200
-    waist_cm = float(pt_row.get("waist", bmi * (3.65 if gender == "เธ" else 3.35)))
-    is_central_obesity = (gender == "เธ" and waist_cm > 90) or (gender != "เธ" and waist_cm > 80)
+    has_chronic = any(k in diag for k in ["แน่นหน้าอก", "เหนื่อย", "ใจสั่น", "หัวใจ", "chest pain", "มะเร็ง", "ก้อน", "tumor"])
+    has_dm = any(k in diag for k in ["เบาหวาน", "diabetes", "dm"]) or float(pt_row.get("fbs", 0)) >= 100 or float(pt_row.get("hba1c", 0)) >= 5.7
+    has_ht = any(k in diag for k in ["ความดัน", "hypertension", "ht"]) or sys_bp >= 140 or dia_bp >= 90
+    has_lipid = any(k in diag for k in ["ไขมัน", "lipid", "cholesterol"]) or float(pt_row.get("cholesterol", 0)) >= 200
+    waist_cm = float(pt_row.get("waist", bmi * (3.65 if gender == "ช" else 3.35)))
+    is_central_obesity = (gender == "ช" and waist_cm > 90) or (gender != "ช" and waist_cm > 80)
 
     reasons = []
     if sys_bp >= 160 or dia_bp >= 100 or bmi >= 32.0 or age >= 60 or has_chronic or pt_row.get("critical_risk") == 1:
         if sys_bp >= 160 or dia_bp >= 100:
-            reasons.append(f"เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธฃเธฐเธ”เธฑเธเธงเธดเธเธคเธ• (BP {sys_bp:.0f}/{dia_bp:.0f} mmHg)")
+            reasons.append(f"ความดันโลหิตระดับวิกฤต (BP {sys_bp:.0f}/{dia_bp:.0f} mmHg)")
         if bmi >= 32.0:
-            reasons.append(f"เนเธฃเธเธญเนเธงเธเธฃเธธเธเนเธฃเธ (BMI {bmi:.1f})")
-        best_sub = "เธซเธฑเธงเนเธ (Heart Check)" if (sys_bp >= 160 or dia_bp >= 100) else "เธเธฑเธ”เธเธฃเธญเธเธกเธฐเน€เธฃเนเธ"
+            reasons.append(f"โรคอ้วนรุนแรง (BMI {bmi:.1f})")
+        best_sub = "หัวใจ (Heart Check)" if (sys_bp >= 160 or dia_bp >= 100) else "คัดกรองมะเร็ง"
         return 4, reasons, best_sub
 
     if (140 <= sys_bp < 160) or has_ht or has_dm or has_lipid or (27.5 <= bmi < 32.0) or (50 <= age < 60):
-        if has_dm: reasons.append("เธเธเธเนเธฒเธเนเธณเธ•เธฒเธฅเนเธเน€เธฅเธทเธญเธ”เธชเธนเธ")
-        if 140 <= sys_bp < 160: reasons.append(f"เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธชเธนเธเธฃเธฐเธ”เธฑเธ 1 (BP {sys_bp:.0f}/{dia_bp:.0f})")
-        best_sub = "เน€เธเธฒเธซเธงเธฒเธ (Diabetes Check)" if has_dm else "เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เธชเธนเธ (Hypertension Check)"
+        if has_dm: reasons.append("พบค่าน้ำตาลในเลือดสูง")
+        if 140 <= sys_bp < 160: reasons.append(f"ความดันโลหิตสูงระดับ 1 (BP {sys_bp:.0f}/{dia_bp:.0f})")
+        best_sub = "เบาหวาน (Diabetes Check)" if has_dm else "ความดันโลหิตสูง (Hypertension Check)"
         return 3, reasons, best_sub
 
     if (120 <= sys_bp < 140) or bmi >= 23.0 or (35 <= age < 50) or is_central_obesity:
-        if bmi >= 23.0: reasons.append(f"เธเนเธณเธซเธเธฑเธเน€เธเธดเธเน€เธเธ“เธ‘เน (BMI {bmi:.1f})")
-        best_sub = "เธเธเธญเนเธงเธ (Obesity Check)" if bmi > 25.0 else "เธงเธฑเธข 35+"
+        if bmi >= 23.0: reasons.append(f"น้ำหนักเกินเกณฑ์ (BMI {bmi:.1f})")
+        best_sub = "คนอ้วน (Obesity Check)" if bmi > 25.0 else "วัย 35+"
         return 2, reasons, best_sub
 
-    reasons.append("เธชเธธเธเธ เธฒเธเนเธ”เธขเธฃเธงเธกเนเธเนเธเนเธฃเธเธ”เธต")
+    reasons.append("สุขภาพโดยรวมแข็งแรงดี")
     best_sub = "PREMIUM" if age > 35 else ("STANDARD" if age >= 30 else "BASIC")
     return 1, reasons, best_sub
 
@@ -401,16 +401,16 @@ def render_action_panel(dv):
 
     ac1, ac2 = st.columns(2)
     with ac1:
-        gen = st.button("๐”” Alert List", use_container_width=True)
+        gen = st.button("🔔 Alert List", use_container_width=True)
     with ac2:
-        sched = st.button("๐“… Outreach", use_container_width=True)
+        sched = st.button("📅 Outreach", use_container_width=True)
 
     if gen:
         if not high_risk.empty:
-            st.success(f"โ… {len(high_risk)} เธฃเธฒเธขเธเธฒเธฃ")
-            st.download_button("๐“ฅ เธ”เธฒเธงเธเนเนเธซเธฅเธ” CSV", high_risk.to_csv(index=False).encode("utf-8-sig"), "alert_list.csv", "text/csv", use_container_width=True)
+            st.success(f"✅ {len(high_risk)} รายการ")
+            st.download_button("📥 ดาวน์โหลด CSV", high_risk.to_csv(index=False).encode("utf-8-sig"), "alert_list.csv", "text/csv", use_container_width=True)
         else:
-            st.info("เนเธกเนเธกเธตเธเธฅเธธเนเธกเน€เธชเธตเนเธขเธเธงเธดเธเธคเธ•")
+            st.info("ไม่มีกลุ่มเสี่ยงวิกฤต")
 
     if "outreach_q" not in st.session_state:
         st.session_state["outreach_q"] = []
@@ -418,43 +418,43 @@ def render_action_panel(dv):
         st.session_state["show_sched"] = True
     if st.session_state.get("show_sched"):
         with st.form("sched_form"):
-            ids = st.multiselect("เน€เธฅเธทเธญเธ Patient", high_risk["patient_id"].tolist() if not high_risk.empty else [])
-            d = st.date_input("เธงเธฑเธเธ—เธตเนเธเธฑเธ”")
-            note = st.text_area("เธเธฑเธเธ—เธถเธ")
-            if st.form_submit_button("เธขเธทเธเธขเธฑเธ"):
-                st.session_state["outreach_q"].append({"เธงเธฑเธ": str(d), "เธฃเธฒเธข": len(ids), "เธเธฑเธเธ—เธถเธ": note})
+            ids = st.multiselect("เลือก Patient", high_risk["patient_id"].tolist() if not high_risk.empty else [])
+            d = st.date_input("วันที่นัด")
+            note = st.text_area("บันทึก")
+            if st.form_submit_button("ยืนยัน"):
+                st.session_state["outreach_q"].append({"วัน": str(d), "ราย": len(ids), "บันทึก": note})
                 st.session_state["show_sched"] = False
-                st.success(f"โ… เธเธณเธซเธเธ”เธเธฒเธฃ {len(ids)} เธฃเธฒเธข")
+                st.success(f"✅ กำหนดการ {len(ids)} ราย")
     return high_risk
 
 @st.fragment
 def render_patient_profile(avail_df, summary_pts, dv, sel_idx):
-    st.markdown("#### ๐“ Patient Profile & Recommendation")
+    st.markdown("#### 📋 Patient Profile & Recommendation")
     if sel_idx and avail_df is not None:
         sel_pid = avail_df.iloc[sel_idx[0]]["patient_id"]
         pt_data = summary_pts.loc[sel_pid]
         score, reasons_html, pkg_name, total_price, screenings = _analyze_patient_risk(pt_data)
-        gender_icon = "๐‘ฉ" if pt_data["gender_code"] > 0.5 else "๐‘จ"
+        gender_icon = "👩" if pt_data["gender_code"] > 0.5 else "👨"
         if score <= 60:
-            c_tx, badge = "#B3261E", "๐จ High Risk"
+            c_tx, badge = "#B3261E", "🚨 High Risk"
         elif score <= 80:
-            c_tx, badge = "#B54708", "โ ๏ธ Medium Risk"
+            c_tx, badge = "#B54708", "⚠️ Medium Risk"
         else:
-            c_tx, badge = "#065F46", "๐ฑ Low Risk"
-        st.markdown(f"{gender_icon} **{sel_pid}** โ€” เธญเธฒเธขเธธ: {pt_data['age_at_visit']:.0f} เธเธต | :{badge}:")
+            c_tx, badge = "#065F46", "🌱 Low Risk"
+        st.markdown(f"{gender_icon} **{sel_pid}** — อายุ: {pt_data['age_at_visit']:.0f} ปี | :{badge}:")
 
-        tab1, tab2, tab3 = st.tabs(["๐“ เธเนเธญเธกเธนเธฅเธชเธธเธเธ เธฒเธ", "๐ฅ เธเธฃเธฐเธงเธฑเธ•เธดเธเธฒเธฃเธงเธดเธเธดเธเธเธฑเธข", "๐’ เนเธเธเธเธฒเธฃเธ•เธฃเธงเธเธ—เธตเนเนเธเธฐเธเธณ"])
+        tab1, tab2, tab3 = st.tabs(["📊 ข้อมูลสุขภาพ", "🏥 ประวัติการวินิจฉัย", "💎 แผนการตรวจที่แนะนำ"])
 
         with tab1:
             st.metric("Health Score", f"{score}%")
-            st.info(f"๐’ก AI Analysis: {reasons_html}")
+            st.info(f"💡 AI Analysis: {reasons_html}")
 
         with tab2:
             hist_df = dv[dv["patient_id"] == sel_pid].sort_values("visit_date", ascending=False)
             if not hist_df.empty:
                 disp_hist = hist_df[["visit_date", "clinic_name", "diagnosis_clean", "systolic", "bmi", "critical_risk"]].copy()
                 disp_hist["visit_date"] = disp_hist["visit_date"].dt.strftime("%Y-%m-%d")
-                disp_hist.columns = ["เธงเธฑเธเธ—เธตเน", "เธเธฅเธดเธเธดเธ", "เธงเธดเธเธดเธเธเธฑเธข", "Sys", "BMI", "Risk"]
+                disp_hist.columns = ["วันที่", "คลินิก", "วินิจฉัย", "Sys", "BMI", "Risk"]
 
                 def highlight_risk(row):
                     if row["Risk"] == 1:
@@ -467,31 +467,31 @@ def render_patient_profile(avail_df, summary_pts, dv, sel_idx):
 
                 st.dataframe(disp_hist.style.apply(highlight_risk, axis=1), use_container_width=True, hide_index=True, height=220)
             else:
-                st.info("เนเธกเนเธเธเธเธฃเธฐเธงเธฑเธ•เธดเธเธฒเธฃเธฃเธฑเธเธเธฃเธดเธเธฒเธฃเนเธเธฃเธฐเธเธ")
+                st.info("ไม่พบประวัติการรับบริการในระบบ")
 
         with tab3:
             pkg_info = HEALTH_PACKAGES.get(pkg_name, {})
-            st.markdown(f"**Package เธซเธฅเธฑเธ:** {pkg_name} โ€” เธฟ {pkg_info.get('price', 0):,.0f}")
+            st.markdown(f"**Package หลัก:** {pkg_name} — ฿ {pkg_info.get('price', 0):,.0f}")
             if pkg_info.get("tests"):
                 for t in pkg_info["tests"]:
-                    st.markdown(f"โ€ข {t}")
+                    st.markdown(f"• {t}")
             if screenings:
-                st.markdown("**๐” Add-on เน€เธเธเธฒเธฐเธเธธเธเธเธฅ:**")
+                st.markdown("**🔍 Add-on เฉพาะบุคคล:**")
                 for sc in screenings:
                     st.markdown(f"- {sc}")
-            st.markdown(f"**เธฃเธงเธกเธเธฃเธฐเน€เธกเธดเธเธฃเธฒเธเธฒ: เธฟ {total_price:,.0f}**")
+            st.markdown(f"**รวมประเมินราคา: ฿ {total_price:,.0f}**")
     else:
-        st.info("๐‘ เธเธฅเธดเธเน€เธฅเธทเธญเธเธเธนเนเธเนเธงเธขเธเธฒเธเธ•เธฒเธฃเธฒเธเธ”เนเธฒเธเธเนเธฒเธข เน€เธเธทเนเธญเธ”เธน Profile")
+        st.info("👈 คลิกเลือกผู้ป่วยจากตารางด้านซ้าย เพื่อดู Profile")
 
 @st.fragment
 def render_forecast_dashboard(df):
     if df is None or df.empty:
-        st.warning("โ ๏ธ เนเธกเนเธเธเธเนเธญเธกเธนเธฅเธชเธณเธซเธฃเธฑเธเธเธฃเธฐเธกเธงเธฅเธเธฅเธเธขเธฒเธเธฃเธ“เน")
+        st.warning("⚠️ ไม่พบข้อมูลสำหรับประมวลผลพยากรณ์")
         return
 
     df_valid = df.dropna(subset=["visit_date"]).copy() if "visit_date" in df.columns else pd.DataFrame()
     if df_valid.empty:
-        st.warning("โ ๏ธ เนเธกเนเธเธเธเธญเธฅเธฑเธกเธเน visit_date เธซเธฃเธทเธญเธเนเธญเธกเธนเธฅเธงเธฑเธเธ—เธตเนเนเธกเนเธชเธกเธเธนเธฃเธ“เน")
+        st.warning("⚠️ ไม่พบคอลัมน์ visit_date หรือข้อมูลวันที่ไม่สมบูรณ์")
         return
 
     df_valid["ym"] = df_valid["visit_date"].dt.to_period("M")
@@ -529,13 +529,13 @@ def render_forecast_dashboard(df):
 
     ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([2, 1, 1])
     with ctrl_col1:
-        scenario = st.radio("๐ฏ เนเธเธเธชเธ–เธฒเธเธเธฒเธฃเธ“เนเธเธขเธฒเธเธฃเธ“เน:", ["๐“ เธกเธฒเธ•เธฃเธเธฒเธ", "๐€ เน€เธเธดเธเธฃเธธเธ (+10%)", "๐ก๏ธ เธญเธเธธเธฃเธฑเธเธฉเนเธเธดเธขเธก (-5%)"], horizontal=True, key="fc_scenario")
+        scenario = st.radio("🎯 แผนสถานการณ์พยากรณ์:", ["📈 มาตรฐาน", "🚀 เชิงรุก (+10%)", "🛡️ อนุรักษ์นิยม (-5%)"], horizontal=True, key="fc_scenario")
     with ctrl_col2:
-        show_ci_band = st.checkbox("๐ก๏ธ เนเธชเธ”เธ Confidence Band", value=True, key="fc_show_ci")
+        show_ci_band = st.checkbox("🛡️ แสดง Confidence Band", value=True, key="fc_show_ci")
     with ctrl_col3:
-        show_crit_line = st.checkbox("โ ๏ธ เนเธชเธ”เธเธเธฅเธธเนเธกเน€เธชเธตเนเธขเธ NCDs", value=True, key="fc_show_crit")
+        show_crit_line = st.checkbox("⚠️ แสดงกลุ่มเสี่ยง NCDs", value=True, key="fc_show_crit")
 
-    scenario_mult = 1.10 if "เน€เธเธดเธเธฃเธธเธ" in scenario else (0.95 if "เธญเธเธธเธฃเธฑเธเธฉเนเธเธดเธขเธก" in scenario else 1.00)
+    scenario_mult = 1.10 if "เชิงรุก" in scenario else (0.95 if "อนุรักษ์นิยม" in scenario else 1.00)
     np.random.seed(42)
     forecast_data, base_step = [], len(hist_cases)
 
@@ -558,53 +558,53 @@ def render_forecast_dashboard(df):
     tot_2026 = sum(r["projected_cases"] for r in forecast_data if r["year"] == 2026)
     tot_crit_24m = sum(r["projected_critical"] for r in forecast_data)
 
-    st.markdown("### ๐”ฎ เธเธขเธฒเธเธฃเธ“เนเนเธเธงเนเธเนเธกเธชเธธเธเธ เธฒเธ (AI Forecast 2025-2026)")
+    st.markdown("### 🔮 พยากรณ์แนวโน้มสุขภาพ (AI Forecast 2025-2026)")
     c1, c2, c3 = st.columns(3)
-    c1.metric("๐‘ฅ เธเธฒเธ”เธเธฒเธฃเธ“เนเธเธนเนเธฃเธฑเธเธเธฃเธดเธเธฒเธฃเธฃเธงเธก (24 เน€เธ”เธทเธญเธ)", f"{tot_24m:,} เน€เธเธช", f"เธเธต 68: {tot_2025:,} | เธเธต 69: {tot_2026:,}")
-    c2.metric("๐“ เธญเธฑเธ•เธฃเธฒเธเธฒเธฃเน€เธ•เธดเธเนเธ•เธเธฒเธ”เธเธฒเธฃเธ“เน", f"{((tot_2026 - tot_2025) / tot_2025 * 100):+.1f}% YoY")
-    c3.metric("โ ๏ธ เธเธฒเธ”เธเธฒเธฃเธ“เนเธเธฅเธธเนเธกเน€เธชเธตเนเธขเธเธงเธดเธเธคเธ• (NCDs)", f"{(tot_crit_24m / tot_24m * 100):.1f}%", f"{tot_crit_24m:,} เธเธ", delta_color="inverse")
+    c1.metric("👥 คาดการณ์ผู้รับบริการรวม (24 เดือน)", f"{tot_24m:,} เคส", f"ปี 68: {tot_2025:,} | ปี 69: {tot_2026:,}")
+    c2.metric("📈 อัตราการเติบโตคาดการณ์", f"{((tot_2026 - tot_2025) / tot_2025 * 100):+.1f}% YoY")
+    c3.metric("⚠️ คาดการณ์กลุ่มเสี่ยงวิกฤต (NCDs)", f"{(tot_crit_24m / tot_24m * 100):.1f}%", f"{tot_crit_24m:,} คน", delta_color="inverse")
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=hist_periods, y=hist_cases, mode="lines+markers", name="เธเนเธญเธกเธนเธฅเธเธฃเธดเธเนเธเธญเธ”เธตเธ•", line=dict(color="#0E5C56", width=3.5)))
+    fig.add_trace(go.Scatter(x=hist_periods, y=hist_cases, mode="lines+markers", name="ข้อมูลจริงในอดีต", line=dict(color="#0E5C56", width=3.5)))
     future_x = [hist_periods[-1]] + [r["period"] for r in forecast_data]
     future_y = [hist_cases[-1]] + [r["projected_cases"] for r in forecast_data]
     if show_ci_band:
         fig.add_trace(go.Scatter(x=future_x, y=[hist_cases[-1]] + [r["upper_bound"] for r in forecast_data], mode="lines", line=dict(width=0), showlegend=False))
         fig.add_trace(go.Scatter(x=future_x, y=[hist_cases[-1]] + [r["lower_bound"] for r in forecast_data], mode="lines", line=dict(width=0), fill="tonexty", fillcolor="rgba(217, 119, 6, 0.16)", name="95% Confidence Band"))
-    fig.add_trace(go.Scatter(x=future_x, y=future_y, mode="lines+markers", name="เธเธขเธฒเธเธฃเธ“เน AI", line=dict(color="#D97706", width=3.2, dash="dash")))
+    fig.add_trace(go.Scatter(x=future_x, y=future_y, mode="lines+markers", name="พยากรณ์ AI", line=dict(color="#D97706", width=3.2, dash="dash")))
     if show_crit_line:
-        fig.add_trace(go.Scatter(x=future_x, y=[hist_critical[-1]] + [r["projected_critical"] for r in forecast_data], mode="lines+markers", name="เธเธฅเธธเนเธกเน€เธชเธตเนเธขเธ NCDs", line=dict(color="#B3261E", width=2.5, dash="dot")))
+        fig.add_trace(go.Scatter(x=future_x, y=[hist_critical[-1]] + [r["projected_critical"] for r in forecast_data], mode="lines+markers", name="กลุ่มเสี่ยง NCDs", line=dict(color="#B3261E", width=2.5, dash="dot")))
     fig.update_layout(height=480, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02))
     st.plotly_chart(fig, use_container_width=True)
 
 @st.fragment
 def render_other_packages_dashboard(dv, df, search_term):
     if "disease_group" in dv.columns:
-        other_condition = (dv["disease_group"] == "เธญเธทเนเธ เน") | (dv["disease_group"].isna()) | (dv["disease_group"] == "เนเธกเนเธฃเธฐเธเธธ") | (dv["disease_group"] == "เธ—เธฑเนเธงเนเธ")
+        other_condition = (dv["disease_group"] == "อื่น ๆ") | (dv["disease_group"].isna()) | (dv["disease_group"] == "ไม่ระบุ") | (dv["disease_group"] == "ทั่วไป")
     else:
         other_condition = pd.Series(True, index=dv.index)
     other_dv = dv[other_condition].copy()
     if search_term:
         other_dv = other_dv[other_dv.astype(str).apply(lambda col: col.str.contains(search_term, case=False, na=False)).any(axis=1)]
 
-    tab_brochure, tab_raw = st.tabs(["๐ฅ เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ 4 เธเธฅเธธเนเธก (AI Architect)", "๐“ เธเนเธญเธกเธนเธฅเธเธนเนเธฃเธฑเธเธเธฃเธดเธเธฒเธฃเนเธเธเธ•เธฒเธฃเธฒเธ"])
+    tab_brochure, tab_raw = st.tabs(["🏥 แพคเกจตรวจสุขภาพ 4 กลุ่ม (AI Architect)", "📊 ข้อมูลผู้รับบริการแบบตาราง"])
     with tab_raw:
         st.dataframe(other_dv, use_container_width=True)
 
     with tab_brochure:
-        st.markdown("### ๐ฅ เนเธเธเน€เธเธเธ•เธฃเธงเธเธชเธธเธเธ เธฒเธ 4 เธเธฅเธธเนเธก (Vichaivej Omnoi)")
+        st.markdown("### 🏥 แพคเกจตรวจสุขภาพ 4 กลุ่ม (Vichaivej Omnoi)")
         if other_dv.empty:
-            st.warning("โ ๏ธ เนเธกเนเธเธเธฃเธฒเธขเธเธทเนเธญเธเธนเนเธฃเธฑเธเธเธฃเธดเธเธฒเธฃ")
+            st.warning("⚠️ ไม่พบรายชื่อผู้รับบริการ")
             return
         avail_pids = other_dv["patient_id"].dropna().unique().tolist() if "patient_id" in other_dv.columns else [f"PT-{i+1:03d}" for i in range(min(10, len(other_dv)))]
-        sel_pid = st.selectbox("๐‘ค เน€เธฅเธทเธญเธเธเธนเนเธฃเธฑเธเธเธฃเธดเธเธฒเธฃเธ—เธตเนเธ•เนเธญเธเธเธฒเธฃเธงเธดเน€เธเธฃเธฒเธฐเธซเน:", options=avail_pids, index=0)
+        sel_pid = st.selectbox("👤 เลือกผู้รับบริการที่ต้องการวิเคราะห์:", options=avail_pids, index=0)
 
         pt_records = df[df["patient_id"] == sel_pid] if "patient_id" in df.columns else other_dv.iloc[0:1]
         pt_row = pt_records.iloc[-1].to_dict() if not pt_records.empty else other_dv.iloc[0].to_dict()
         pt_row["visits"] = len(pt_records)
 
         assigned_tier, risk_reasons, best_match_sub_pkg = _assess_patient_tier(pt_row)
-        st.success(f"**AI Recommendation:** เนเธเธฐเธเธณ {HEALTH_PACKAGES_4LEVEL[assigned_tier]['name']} (Best Match: {best_match_sub_pkg})")
+        st.success(f"**AI Recommendation:** แนะนำ {HEALTH_PACKAGES_4LEVEL[assigned_tier]['name']} (Best Match: {best_match_sub_pkg})")
 
         cols = st.columns(4)
         for col, level_key in zip(cols, [1, 2, 3, 4]):
@@ -614,19 +614,19 @@ def render_other_packages_dashboard(dv, df, search_term):
                 border_style = f"border: 3px solid {group['header_bg']};" if is_tier_match else ""
                 st.markdown(f"<div style='{border_style} padding:8px; border-radius:8px;'><b>{group['short_title']}</b><br><small>{group['target_audience']}</small></div>", unsafe_allow_html=True)
                 for sub in group["sub_packages"]:
-                    if st.button(f"เน€เธฅเธทเธญเธ {sub['short_name']} ({sub['price']:,}เธฟ)", key=f"btn_{level_key}_{sub['short_name']}_{sel_pid}", use_container_width=True):
-                        st.toast(f"โ… เน€เธฅเธทเธญเธ {sub['name']} เน€เธฃเธตเธขเธเธฃเนเธญเธข")
+                    if st.button(f"เลือก {sub['short_name']} ({sub['price']:,}฿)", key=f"btn_{level_key}_{sub['short_name']}_{sel_pid}", use_container_width=True):
+                        st.toast(f"✅ เลือก {sub['name']} เรียบร้อย")
 
 @st.fragment
 def render_disease_center(dv, df, selected_tab_key, active_config, search_term):
     disease_df = dv[active_config["filter_condition"](dv)].copy()
     st.markdown(f"### {active_config['icon']} {selected_tab_key} Command Center")
-    st.caption(f"เน€เธเนเธฒเธซเธกเธฒเธขเธเธฒเธฃเธฃเธฑเธเธฉเธฒ: {active_config['target_desc']}")
+    st.caption(f"เป้าหมายการรักษา: {active_config['target_desc']}")
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("เธเธณเธเธงเธเธเธนเนเธเนเธงเธข (เธ•เธฒเธกเธ•เธฑเธงเธเธฃเธญเธ)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} เธเธ")
+    c1.metric("จำนวนผู้ป่วย (ตามตัวกรอง)", f"{disease_df['patient_id'].nunique() if 'patient_id' in disease_df.columns else len(disease_df):,} คน")
     p1_count = len(disease_df[disease_df["priority_status"] == "P1-Urgent"])
-    c2.metric("เธเธฅเธธเนเธกเน€เธชเธตเนเธขเธ (P1-Urgent)", f"{p1_count} เธเธ", delta="-เธ•เนเธญเธเธ•เธดเธ”เธ•เธฒเธกเธ—เธฑเธเธ—เธต" if p1_count > 0 else "เธเธเธ•เธด", delta_color="inverse")
+    c2.metric("กลุ่มเสี่ยง (P1-Urgent)", f"{p1_count} คน", delta="-ต้องติดตามทันที" if p1_count > 0 else "ปกติ", delta_color="inverse")
 
     if search_term and "patient_id" in disease_df.columns:
         disease_df = disease_df[disease_df["patient_id"].astype(str).str.contains(search_term, case=False)]
@@ -646,11 +646,11 @@ def render_disease_center(dv, df, selected_tab_key, active_config, search_term):
         sel_idx = selection.selection.rows
         if sel_idx:
             sel_pid = sort_df.iloc[sel_idx[0]]["patient_id"]
-            st.markdown(f"### ๐’ เนเธเธฐเธเธณ Combined Care Package เธชเธณเธซเธฃเธฑเธ: {sel_pid}")
-            if st.button(f"โจ Generate {selected_tab_key} Care Package"):
-                st.success(f"โ… **เธชเธฃเนเธฒเธ {selected_tab_key} Package เธชเธณเน€เธฃเนเธ!**")
+            st.markdown(f"### 💎 แนะนำ Combined Care Package สำหรับ: {sel_pid}")
+            if st.button(f"✨ Generate {selected_tab_key} Care Package"):
+                st.success(f"✅ **สร้าง {selected_tab_key} Package สำเร็จ!**")
     else:
-        st.info("เนเธกเนเธเธเธเธเนเธเนเนเธเธเธฅเธธเนเธกเธเธตเน")
+        st.info("ไม่พบคนไข้ในกลุ่มนี้")
 
 # ============================================================
 # Sidebar & Filtering
@@ -661,20 +661,20 @@ selected_tab_key = selected_tab_str.split(" ", 1)[1]
 active_config = DISEASE_CONFIG[selected_tab_key]
 
 with st.sidebar:
-    st.markdown(f"### ๐๏ธ Filter Scope: {selected_tab_key}")
-    search_term = st.text_input("๐” เธเนเธเธซเธฒ (ID/เธเธทเนเธญ)", key="ctx_search")
+    st.markdown(f"### 🎛️ Filter Scope: {selected_tab_key}")
+    search_term = st.text_input("🔍 ค้นหา (ID/ชื่อ)", key="ctx_search")
     all_diseases = sorted(df["disease_group"].unique())
-    disease_sel = st.multiselect("เธเธฅเธธเนเธกเนเธฃเธ", all_diseases, default=all_diseases)
+    disease_sel = st.multiselect("กลุ่มโรค", all_diseases, default=all_diseases)
     all_genders = sorted(df["gender"].unique())
-    gender_sel = st.multiselect("เน€เธเธจ", all_genders, default=all_genders)
+    gender_sel = st.multiselect("เพศ", all_genders, default=all_genders)
     all_clinics = sorted(df["clinic_name"].dropna().unique())
-    clinic_sel = st.multiselect("เธเธฅเธดเธเธดเธ", all_clinics, default=all_clinics)
+    clinic_sel = st.multiselect("คลินิก", all_clinics, default=all_clinics)
 
 mask = (df["disease_group"].isin(disease_sel) & df["gender"].isin(gender_sel) & df["clinic_name"].isin(clinic_sel))
 dv = df[mask].copy()
 
 if dv.empty:
-    st.warning("โ ๏ธ เนเธกเนเธกเธตเธเนเธญเธกเธนเธฅเธ•เธฒเธกเธ•เธฑเธงเธเธฃเธญเธเธ—เธตเนเน€เธฅเธทเธญเธ")
+    st.warning("⚠️ ไม่มีข้อมูลตามตัวกรองที่เลือก")
     st.stop()
 
 # ============================================================
@@ -682,26 +682,26 @@ if dv.empty:
 # ============================================================
 if active_config.get("is_general"):
     as_of = df["visit_date"].max()
-    as_of_str = as_of.strftime("%d %b %Y") if pd.notna(as_of) else "เนเธกเนเธฃเธฐเธเธธ"
-    st.markdown(f"## ๐ฅ Clinical Command Center")
-    st.caption(f"เธเนเธญเธกเธนเธฅเธฅเนเธฒเธชเธธเธ” {as_of_str}")
+    as_of_str = as_of.strftime("%d %b %Y") if pd.notna(as_of) else "ไม่ระบุ"
+    st.markdown(f"## 🏥 Clinical Command Center")
+    st.caption(f"ข้อมูลล่าสุด {as_of_str}")
 
     total_v = len(dv)
     uniq_pts = dv["patient_id"].nunique() if "patient_id" in dv.columns else total_v
-    st.markdown("### เธชเธฃเธธเธเธ•เธฑเธงเธเธตเนเธงเธฑเธ” (KPIs)")
+    st.markdown("### สรุปตัวชี้วัด (KPIs)")
     k1, k2, k3 = st.columns(3)
-    k1.metric("เธเธณเธเธงเธเน€เธเธชเธฃเธฑเธเธเธฃเธดเธเธฒเธฃ", f"{total_v:,}")
-    k2.metric("เธเธณเธเธงเธเธเธนเนเธฃเธฑเธเธเธฃเธดเธเธฒเธฃ", f"{uniq_pts:,}")
-    k3.metric("เธเธงเธฒเธกเธ”เธฑเธเนเธฅเธซเธดเธ•เน€เธเธฅเธตเนเธข", f"{dv['systolic'].mean():.1f} mmHg")
+    k1.metric("จำนวนเคสรับบริการ", f"{total_v:,}")
+    k2.metric("จำนวนผู้รับบริการ", f"{uniq_pts:,}")
+    k3.metric("ความดันโลหิตเฉลี่ย", f"{dv['systolic'].mean():.1f} mmHg")
 
     st.divider()
 
     c1, c2 = st.columns([1.5, 1])
     with c1:
-        st.markdown("#### โก Command Action Panel")
+        st.markdown("#### ⚡ Command Action Panel")
         render_action_panel(dv)
     with c2:
-        st.markdown("#### ๐” เน€เธฅเธทเธญเธเธเธนเนเธเนเธงเธขเน€เธเธทเนเธญเธเธฃเธฐเน€เธกเธดเธ Package")
+        st.markdown("#### 🔍 เลือกผู้ป่วยเพื่อประเมิน Package")
         if summary_pts is not None and "patient_id" in dv.columns:
             avail_df = summary_pts[summary_pts.index.isin(dv["patient_id"].values)].reset_index()
             selection = st.dataframe(avail_df[["patient_id", "age_at_visit", "bmi"]], use_container_width=True, hide_index=True, height=220, on_select="rerun", selection_mode="single-row")
